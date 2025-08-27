@@ -1,13 +1,39 @@
-// Verificar se Socket.IO está disponível
+// Verificar se Socket.IO está disponível e conectar
 let socket;
 if (typeof io !== 'undefined') {
-    socket = io();
+    try {
+        // Conectar ao Socket.IO com configurações para Vercel
+        socket = io(window.location.origin, {
+            transports: ['websocket', 'polling'],
+            upgrade: true,
+            rememberUpgrade: true,
+            timeout: 20000,
+            forceNew: true
+        });
+        
+        socket.on('connect', () => {
+            console.log('Socket.IO conectado com sucesso!');
+        });
+        
+        socket.on('connect_error', (error) => {
+            console.error('Erro de conexão Socket.IO:', error);
+        });
+        
+    } catch (error) {
+        console.error('Erro ao inicializar Socket.IO:', error);
+        socket = createFallbackSocket();
+    }
 } else {
     console.error('Socket.IO não carregado');
-    socket = {
-        emit: () => {},
-        on: () => {},
-        off: () => {}
+    socket = createFallbackSocket();
+}
+
+// Função para criar socket de fallback
+function createFallbackSocket() {
+    return {
+        emit: (event, data) => console.log('Fallback emit:', event, data),
+        on: (event, callback) => console.log('Fallback on:', event),
+        off: (event, callback) => console.log('Fallback off:', event)
     };
 }
 
