@@ -143,56 +143,139 @@ async function calcularATR(par){
     }
 }
 
-// Estado do bot
-let botAtivo = false;
-let botRodando = false;
-let configBot = {
-    apiKey: '',
-    apiSecret: '',
-    capitalInicial: 500,
-    riskLevel: 'medio'
-};
+// Sistema de sessões por usuário
+const userSessions = new Map();
 
-// Configuração do Socket.IO
+// Função para gerar ID único de sessão
+function generateSessionId() {
+    return 'user_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+}
+
+// Função para obter ou criar sessão do usuário
+function getUserSession(sessionId) {
+    if (!userSessions.has(sessionId)) {
+        userSessions.set(sessionId, {
+            botAtivo: false,
+            botRodando: false,
+            configBot: {
+                apiKey: '',
+                apiSecret: '',
+                capitalInicial: 500,
+                riskLevel: 'medio'
+            },
+            historicoTrades: [],
+            posicoesAbertas: [],
+            capitalAtual: 500
+        });
+    }
+    return userSessions.get(sessionId);
+}
+
+// Configuração do Socket.IO com sessões isoladas
 io.on('connection', (socket) => {
-    console.log('Cliente conectado');
+    console.log('Cliente conectado:', socket.id);
     
-    // Enviar estado atual do bot
+    // Gerar ID de sessão único para este usuário
+    const sessionId = generateSessionId();
+    socket.sessionId = sessionId;
+    
+    // Juntar o usuário à sua sala privada
+    socket.join(sessionId);
+    
+    // Obter sessão do usuário
+    const userSession = getUserSession(sessionId);
+    
+    // Enviar ID da sessão e estado atual do bot para este usuário específico
+    socket.emit('sessionCreated', { sessionId });
     socket.emit('botStatus', {
-        ativo: botAtivo,
-        config: configBot
+        ativo: userSession.botAtivo,
+        config: {
+            // Nunca enviar credenciais reais, apenas status
+            capitalInicial: userSession.configBot.capitalInicial,
+            riskLevel: userSession.configBot.riskLevel,
+            hasApiKeys: !!(userSession.configBot.apiKey && userSession.configBot.apiSecret)
+        }
     });
     
-    // Receber configurações atualizadas
+    // Receber configurações atualizadas (isoladas por usuário)
     socket.on('updateConfig', (novaConfig) => {
-        console.log('Configurações atualizadas:', novaConfig);
-        configBot = { ...configBot, ...novaConfig };
+        console.log(`Configurações atualizadas para sessão ${sessionId}`);
+        const userSession = getUserSession(sessionId);
         
-        // Confirmar para o cliente
-        socket.emit('configUpdated', configBot);
+        // Atualizar apenas a sessão deste usuário
+        userSession.configBot = { ...userSession.configBot, ...novaConfig };
+        
+        // Confirmar apenas para este cliente específico
+        socket.emit('configUpdated', {
+            capitalInicial: userSession.configBot.capitalInicial,
+            riskLevel: userSession.configBot.riskLevel,
+            hasApiKeys: !!(userSession.configBot.apiKey && userSession.configBot.apiSecret)
+        });
     });
     
-    // Iniciar bot
+    // Iniciar bot (isolado por usuário)
     socket.on('startBot', (config) => {
-        console.log('Iniciando bot com configurações:', config);
-        botAtivo = true;
-        configBot = { ...configBot, ...config };
+        console.log(`Iniciando bot para sessão ${sessionId}`);
+        const userSession = getUserSession(sessionId);
         
-        // Confirmar para todos os clientes
-        io.emit('botStarted', { ativo: true, config: configBot });
+        userSession.botAtivo = true;
+        userSession.configBot = { ...userSession.configBot, ...config };
+        
+        // Confirmar apenas para este usuário específico
+        socket.emit('botStarted', { 
+            ativo: true, 
+            config: {
+                capitalInicial: userSession.configBot.capitalInicial,
+                riskLevel: userSession.configBot.riskLevel,
+                hasApiKeys: !!(userSession.configBot.apiKey && userSession.configBot.apiSecret)
+            }
+        });
+        
+        // Iniciar dados de teste para este usuário
+        setTimeout(() => {
+            const dadosTeste = {
+                posicoesAbertas: [
+                    { par: 'BTC/USDT', tipo: 'buy', quantidade: 0.001, precoAbertura: 45000, delta: 0.85 },
+                    { par: 'ETH/USDT', tipo: 'sell', quantidade: 0.05, precoAbertura: 2800, delta: 0.72 }
+                ],
+                historicoTrades: [
+                    { par: 'BNB/USDT', tipo: 'buy', quantidade: 0.1, precoAbertura: 320, precoFechamento: 335, lucro: 1.5 },
+                    { par: 'ADA/USDT', tipo: 'sell', quantidade: 100, precoAbertura: 0.45, precoFechamento: 0.42, lucro: 3.0 }
+                ],
+                capitalAtual: userSession.configBot.capitalInicial + 4.5,
+                diagrama: [
+                    { passo: 'Análise Wyckoff', cor: '#00ff88' },
+                    { passo: 'Delta/GEX', cor: '#ffaa00' },
+                    { passo: 'Execução', cor: '#00c8ff' }
+                ]
+            };
+            
+            // Enviar dados apenas para este usuário específico
+            socket.emit('update', dadosTeste);
+        }, 2000);
     });
     
-    // Pausar bot
+    // Pausar bot (isolado por usuário)
     socket.on('pauseBot', () => {
-        console.log('Pausando bot');
-        botAtivo = false;
+        console.log(`Pausando bot para sessão ${sessionId}`);
+        const userSession = getUserSession(sessionId);
         
-        // Confirmar para todos os clientes
-        io.emit('botPaused', { ativo: false });
+        userSession.botAtivo = false;
+        
+        // Confirmar apenas para este usuário específico
+        socket.emit('botPaused', { ativo: false });
     });
     
     socket.on('disconnect', () => {
-        console.log('Cliente desconectado');
+        console.log(`Cliente desconectado: ${socket.id} (sessão: ${sessionId})`);
+        
+        // Opcional: Limpar sessão após um tempo de inatividade
+        setTimeout(() => {
+            if (userSessions.has(sessionId)) {
+                console.log(`Limpando sessão inativa: ${sessionId}`);
+                userSessions.delete(sessionId);
+            }
+        }, 30 * 60 * 1000); // 30 minutos
     });
 });
 

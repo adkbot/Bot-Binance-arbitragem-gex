@@ -13,11 +13,19 @@ if (typeof io !== 'undefined') {
 
 // Estado do bot - Declarações globais no topo
 let botActive = false;
+let sessionId = null;
 let botConfig = {
     apiKey: '',
     apiSecret: '',
     capitalInicial: 500,
     riskLevel: 'medio'
+};
+
+// Configurações seguras (sem credenciais)
+let safeConfig = {
+    capitalInicial: 500,
+    riskLevel: 'medio',
+    hasApiKeys: false
 };
 
 // Estado do carrossel
@@ -89,11 +97,23 @@ function openSettings() {
     const modal = document.getElementById('settingsModal');
     modal.style.display = 'block';
     
-    // Carregar configurações salvas
-    document.getElementById('apiKey').value = botConfig.apiKey;
-    document.getElementById('apiSecret').value = botConfig.apiSecret;
-    document.getElementById('capitalInicial').value = botConfig.capitalInicial;
-    document.getElementById('riskLevel').value = botConfig.riskLevel;
+    // Carregar apenas configurações seguras (NUNCA credenciais)
+    document.getElementById('apiKey').value = ''; // Sempre vazio por segurança
+    document.getElementById('apiSecret').value = ''; // Sempre vazio por segurança
+    document.getElementById('capitalInicial').value = safeConfig.capitalInicial;
+    document.getElementById('riskLevel').value = safeConfig.riskLevel;
+    
+    // Mostrar status das chaves API sem revelar os valores
+    const apiKeyField = document.getElementById('apiKey');
+    const apiSecretField = document.getElementById('apiSecret');
+    
+    if (safeConfig.hasApiKeys) {
+        apiKeyField.placeholder = 'Chaves configuradas - Digite nova chave para alterar';
+        apiSecretField.placeholder = 'Secret configurado - Digite novo secret para alterar';
+    } else {
+        apiKeyField.placeholder = 'Digite sua chave da API Binance';
+        apiSecretField.placeholder = 'Digite seu secret da API Binance';
+    }
 }
 
 // Fechar modal de configurações
@@ -106,15 +126,31 @@ function closeSettings() {
 function saveSettings(event) {
     event.preventDefault();
     
-    botConfig.apiKey = document.getElementById('apiKey').value;
-    botConfig.apiSecret = document.getElementById('apiSecret').value;
-    botConfig.capitalInicial = parseFloat(document.getElementById('capitalInicial').value);
-    botConfig.riskLevel = document.getElementById('riskLevel').value;
+    const apiKey = document.getElementById('apiKey').value.trim();
+    const apiSecret = document.getElementById('apiSecret').value.trim();
+    const capitalInicial = parseFloat(document.getElementById('capitalInicial').value);
+    const riskLevel = document.getElementById('riskLevel').value;
     
-    // Salvar no localStorage
-    localStorage.setItem('botConfig', JSON.stringify(botConfig));
+    // Atualizar configurações locais (apenas para esta sessão)
+    if (apiKey) botConfig.apiKey = apiKey;
+    if (apiSecret) botConfig.apiSecret = apiSecret;
+    botConfig.capitalInicial = capitalInicial;
+    botConfig.riskLevel = riskLevel;
     
-    // Enviar configurações para o servidor
+    // Atualizar configurações seguras
+    safeConfig.capitalInicial = capitalInicial;
+    safeConfig.riskLevel = riskLevel;
+    safeConfig.hasApiKeys = !!(botConfig.apiKey && botConfig.apiSecret);
+    
+    // NUNCA salvar credenciais no localStorage por segurança
+    const safeConfigToSave = {
+        capitalInicial: capitalInicial,
+        riskLevel: riskLevel
+        // Credenciais NUNCA são salvas localmente
+    };
+    localStorage.setItem('botSafeConfig', JSON.stringify(safeConfigToSave));
+    
+    // Enviar configurações para o servidor (isoladas por sessão)
     socket.emit('updateConfig', botConfig);
     
     closeSettings();
@@ -123,11 +159,18 @@ function saveSettings(event) {
     showNotification('Configurações salvas com sucesso!', 'success');
 }
 
-// Carregar configurações salvas
+// Carregar configurações salvas (apenas dados seguros)
 function loadConfig() {
-    const savedConfig = localStorage.getItem('botConfig');
+    const savedConfig = localStorage.getItem('botSafeConfig');
     if (savedConfig) {
-        botConfig = JSON.parse(savedConfig);
+        const safe = JSON.parse(savedConfig);
+        safeConfig.capitalInicial = safe.capitalInicial || 500;
+        safeConfig.riskLevel = safe.riskLevel || 'medio';
+        
+        // Atualizar botConfig apenas com dados não sensíveis
+        botConfig.capitalInicial = safeConfig.capitalInicial;
+        botConfig.riskLevel = safeConfig.riskLevel;
+        // Credenciais NUNCA são carregadas do localStorage
     }
 }
 
@@ -772,25 +815,64 @@ function updateDiagram(diagrama) {
     }
 }
 
-// Adicionar eventos do Socket.IO para monitoramento
+// Adicionar eventos do Socket.IO para sessões isoladas
+socket.on('sessionCreated', (data) => {
+    sessionId = data.sessionId;
+    console.log('Sessão criada:', sessionId);
+    showNotification('Sessão privada iniciada com sucesso!', 'success');
+});
+
+socket.on('botStatus', (data) => {
+    botActive = data.ativo;
+    if (data.config) {
+        // Atualizar apenas configurações seguras
+        safeConfig.capitalInicial = data.config.capitalInicial;
+        safeConfig.riskLevel = data.config.riskLevel;
+        safeConfig.hasApiKeys = data.config.hasApiKeys;
+        
+        // Atualizar botConfig apenas com dados não sensíveis
+        botConfig.capitalInicial = data.config.capitalInicial;
+        botConfig.riskLevel = data.config.riskLevel;
+    }
+});
+
+socket.on('configUpdated', (data) => {
+    // Atualizar apenas configurações seguras recebidas do servidor
+    safeConfig.capitalInicial = data.capitalInicial;
+    safeConfig.riskLevel = data.riskLevel;
+    safeConfig.hasApiKeys = data.hasApiKeys;
+    
+    showNotification('Configurações atualizadas para sua sessão!', 'success');
+});
+
 socket.on('botStarted', (data) => {
     if (data.ativo) {
+        botActive = true;
         startCarousel();
-        showNotification('Bot conectado e analisando mercado!', 'success');
+        showNotification('Seu bot foi iniciado com sucesso!', 'success');
+        
+        // Atualizar configurações seguras
+        if (data.config) {
+            safeConfig.capitalInicial = data.config.capitalInicial;
+            safeConfig.riskLevel = data.config.riskLevel;
+            safeConfig.hasApiKeys = data.config.hasApiKeys;
+        }
     }
 });
 
 socket.on('botPaused', (data) => {
+    botActive = false;
     stopCarousel();
+    showNotification('Seu bot foi pausado!', 'warning');
 });
 
 socket.on('botError', (error) => {
-    showNotification(`Erro no bot: ${error.message}`, 'error');
+    showNotification(`Erro no seu bot: ${error.message}`, 'error');
     stopCarousel();
 });
 
 socket.on('pairAnalysis', (data) => {
-    // Atualizar com dados reais do servidor
+    // Atualizar com dados reais do servidor (isolados por sessão)
     if (data.analyzing) {
         assetsBeingAnalyzed = data.analyzing;
     }
@@ -800,7 +882,7 @@ socket.on('pairAnalysis', (data) => {
     updateCarousel();
 });
 
-// Manter compatibilidade com eventos antigos
+// Manter compatibilidade com eventos antigos (isolados por sessão)
 socket.on('update', (data) => {
     updateInterface(data);
 });
