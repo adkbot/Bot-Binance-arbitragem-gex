@@ -1,6 +1,17 @@
-const socket = io();
+// Verificar se Socket.IO está disponível
+let socket;
+if (typeof io !== 'undefined') {
+    socket = io();
+} else {
+    console.error('Socket.IO não carregado');
+    socket = {
+        emit: () => {},
+        on: () => {},
+        off: () => {}
+    };
+}
 
-// Estado do bot
+// Estado do bot - Declarações globais no topo
 let botActive = false;
 let botConfig = {
     apiKey: '',
@@ -14,6 +25,9 @@ let assetsBeingAnalyzed = [];
 let foundOpportunities = [];
 let carouselInterval = null;
 
+// Variáveis do gráfico
+let graficoLucro = null;
+
 // Lista de pares para análise
 const tradingPairs = [
     'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'ADAUSDT', 'XRPUSDT',
@@ -21,6 +35,28 @@ const tradingPairs = [
     'MATICUSDT', 'LTCUSDT', 'UNIUSDT', 'LINKUSDT', 'ATOMUSDT',
     'ETCUSDT', 'XLMUSDT', 'BCHUSDT', 'FILUSDT', 'TRXUSDT'
 ];
+
+// Objeto para armazenar símbolos e cores de criptomoedas
+const spriteSymbols = {
+    'BTC': { symbol: '₿', color: '#f7931a' },
+    'ETH': { symbol: 'Ξ', color: '#627eea' },
+    'BNB': { symbol: 'BNB', color: '#f3ba2f' },
+    'SOL': { symbol: 'SOL', color: '#00ffbd' },
+    'XRP': { symbol: 'XRP', color: '#23292f' },
+    'ADA': { symbol: 'ADA', color: '#0033ad' },
+    'DOGE': { symbol: '🐶', color: '#c3a634' },
+    'DOT': { symbol: 'DOT', color: '#e6007a' },
+    'AVAX': { symbol: 'AVAX', color: '#e84142' },
+    'MATIC': { symbol: 'MATIC', color: '#8247e5' },
+    'LINK': { symbol: 'LINK', color: '#2a5ada' },
+    'ATOM': { symbol: 'ATOM', color: '#2e3148' },
+    'LTC': { symbol: 'Ł', color: '#345d9d' },
+    'FTM': { symbol: 'FTM', color: '#1969ff' },
+    'TRX': { symbol: 'TRX', color: '#ff0013' },
+    'NEAR': { symbol: 'NEAR', color: '#000000' },
+    'APE': { symbol: '🦍', color: '#0052ff' },
+    'MANA': { symbol: 'MANA', color: '#ff2d55' }
+};
 
 // Função para alternar tema
 function toggleTheme() {
@@ -302,28 +338,6 @@ function showNotification(message, type) {
     }, 3000);
 }
 
-// Objeto para armazenar símbolos e cores de criptomoedas
-const spriteSymbols = {
-    'BTC': { symbol: '₿', color: '#f7931a' },
-    'ETH': { symbol: 'Ξ', color: '#627eea' },
-    'BNB': { symbol: 'BNB', color: '#f3ba2f' },
-    'SOL': { symbol: 'SOL', color: '#00ffbd' },
-    'XRP': { symbol: 'XRP', color: '#23292f' },
-    'ADA': { symbol: 'ADA', color: '#0033ad' },
-    'DOGE': { symbol: '🐶', color: '#c3a634' },
-    'DOT': { symbol: 'DOT', color: '#e6007a' },
-    'AVAX': { symbol: 'AVAX', color: '#e84142' },
-    'MATIC': { symbol: 'MATIC', color: '#8247e5' },
-    'LINK': { symbol: 'LINK', color: '#2a5ada' },
-    'ATOM': { symbol: 'ATOM', color: '#2e3148' },
-    'LTC': { symbol: 'Ł', color: '#345d9d' },
-    'FTM': { symbol: 'FTM', color: '#1969ff' },
-    'TRX': { symbol: 'TRX', color: '#ff0013' },
-    'NEAR': { symbol: 'NEAR', color: '#000000' },
-    'APE': { symbol: '🦍', color: '#0052ff' },
-    'MANA': { symbol: 'MANA', color: '#ff2d55' }
-};
-
 // Função para criar sprites usando o MCP TestSprite com funcionalidades avançadas
 function createSprite(par, tipo, delta) {
     const symbol = par.split('/')[0];
@@ -379,12 +393,7 @@ styleSheet.textContent = `
 `;
 document.head.appendChild(styleSheet);
 
-const ctx = document.getElementById('graficoLucro').getContext('2d');
-const graficoLucro = new Chart(ctx, {
-    type: 'line',
-    data: { labels: [], datasets: [{ label: 'Capital (USDT)', data: [], borderColor: '#9b59b6', backgroundColor: 'rgba(155,89,182,0.2)', tension: 0.3 }]},
-    options: { responsive: true, plugins: { legend: { display: true } } }
-});
+// Inicialização do gráfico será feita no DOMContentLoaded
 
 socket.on('update', data => {
   const { posicoesAbertas, historicoTrades, capitalAtual, diagrama } = data;
@@ -495,6 +504,47 @@ document.addEventListener('DOMContentLoaded', function() {
     // Carregar tema e configurações
     loadTheme();
     loadConfig();
+    
+    // Inicializar gráfico Chart.js
+    const ctx = document.getElementById('graficoLucro');
+    if (ctx) {
+        graficoLucro = new Chart(ctx.getContext('2d'), {
+            type: 'line',
+            data: { 
+                labels: [], 
+                datasets: [{ 
+                    label: 'Capital (USDT)', 
+                    data: [], 
+                    borderColor: '#00ff88', 
+                    backgroundColor: 'rgba(0,255,136,0.1)', 
+                    tension: 0.3,
+                    fill: true
+                }]
+            },
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false,
+                plugins: { 
+                    legend: { 
+                        display: true,
+                        labels: {
+                            color: '#ffffff'
+                        }
+                    } 
+                },
+                scales: {
+                    x: {
+                        ticks: { color: '#ffffff' },
+                        grid: { color: 'rgba(255,255,255,0.1)' }
+                    },
+                    y: {
+                        ticks: { color: '#ffffff' },
+                        grid: { color: 'rgba(255,255,255,0.1)' }
+                    }
+                }
+            }
+        });
+    }
     
     // Event listeners para botões (com verificação de existência)
     const themeToggle = document.getElementById('theme-toggle');
