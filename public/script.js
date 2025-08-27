@@ -1,41 +1,124 @@
-// Verificar se Socket.IO está disponível e conectar
-let socket;
-if (typeof io !== 'undefined') {
-    try {
-        // Conectar ao Socket.IO com configurações para Vercel
-        socket = io(window.location.origin, {
-            transports: ['websocket', 'polling'],
-            upgrade: true,
-            rememberUpgrade: true,
-            timeout: 20000,
-            forceNew: true
-        });
-        
-        socket.on('connect', () => {
-            console.log('Socket.IO conectado com sucesso!');
-        });
-        
-        socket.on('connect_error', (error) => {
-            console.error('Erro de conexão Socket.IO:', error);
-        });
-        
-    } catch (error) {
-        console.error('Erro ao inicializar Socket.IO:', error);
-        socket = createFallbackSocket();
+// Sistema de comunicação HTTP (sem Socket.IO) para Vercel
+let httpClient = {
+    sessionId: null,
+    eventListeners: new Map(),
+    pollingInterval: null,
+    
+    // Simular emit do Socket.IO
+    emit: async function(event, data) {
+        try {
+            const response = await fetch('/api/socket-event', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    sessionId: this.sessionId,
+                    event: event,
+                    data: data
+                })
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                console.log('Evento enviado:', event, result);
+                return result;
+            }
+        } catch (error) {
+            console.error('Erro ao enviar evento:', error);
+        }
+    },
+    
+    // Simular on do Socket.IO
+    on: function(event, callback) {
+        if (!this.eventListeners.has(event)) {
+            this.eventListeners.set(event, []);
+        }
+        this.eventListeners.get(event).push(callback);
+    },
+    
+    // Simular off do Socket.IO
+    off: function(event, callback) {
+        if (this.eventListeners.has(event)) {
+            const listeners = this.eventListeners.get(event);
+            const index = listeners.indexOf(callback);
+            if (index > -1) {
+                listeners.splice(index, 1);
+            }
+        }
+    },
+    
+    // Inicializar sessão
+    init: async function() {
+        try {
+            const response = await fetch('/api/create-session', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                this.sessionId = result.sessionId;
+                console.log('Sessão HTTP criada:', this.sessionId);
+                
+                // Simular evento de conexão
+                this.triggerEvent('sessionCreated', { sessionId: this.sessionId });
+                
+                // Iniciar polling para receber eventos
+                this.startPolling();
+                
+                return true;
+            }
+        } catch (error) {
+            console.error('Erro ao criar sessão:', error);
+        }
+        return false;
+    },
+    
+    // Polling para receber eventos do servidor
+    startPolling: function() {
+        this.pollingInterval = setInterval(async () => {
+            try {
+                const response = await fetch(`/api/poll-events?sessionId=${this.sessionId}`);
+                if (response.ok) {
+                    const events = await response.json();
+                    events.forEach(eventData => {
+                        this.triggerEvent(eventData.event, eventData.data);
+                    });
+                }
+            } catch (error) {
+                console.error('Erro no polling:', error);
+            }
+        }, 2000); // Poll a cada 2 segundos
+    },
+    
+    // Disparar evento para listeners
+    triggerEvent: function(event, data) {
+        if (this.eventListeners.has(event)) {
+            this.eventListeners.get(event).forEach(callback => {
+                try {
+                    callback(data);
+                } catch (error) {
+                    console.error('Erro ao executar callback:', error);
+                }
+            });
+        }
     }
-} else {
-    console.error('Socket.IO não carregado');
-    socket = createFallbackSocket();
-}
+};
 
-// Função para criar socket de fallback
-function createFallbackSocket() {
-    return {
-        emit: (event, data) => console.log('Fallback emit:', event, data),
-        on: (event, callback) => console.log('Fallback on:', event),
-        off: (event, callback) => console.log('Fallback off:', event)
-    };
-}
+// Usar httpClient como socket
+let socket = httpClient;
+
+// Inicializar conexão HTTP
+httpClient.init().then(success => {
+    if (success) {
+        console.log('Sistema de comunicação HTTP inicializado com sucesso!');
+    } else {
+        console.error('Falha ao inicializar sistema de comunicação HTTP');
+    }
+});
 
 // Estado do bot - Declarações globais no topo
 let botActive = false;

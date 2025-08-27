@@ -1,8 +1,6 @@
 require('dotenv').config();
 const ccxt = require("ccxt");
 const express = require("express");
-const { Server } = require("socket.io");
-const http = require("http");
 const path = require("path");
 
 // Configuração do Twilio (modo teste)
@@ -26,18 +24,9 @@ const binance = new ccxt.binance({
 
 // Configuração do Express
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  },
-  transports: ['websocket', 'polling'],
-  allowEIO3: true
-});
 
-// Middleware para Socket.IO no Vercel
-app.use('/socket.io/', (req, res, next) => {
+// Middleware CORS
+app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
@@ -100,6 +89,123 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
+// Rota para criar sessão HTTP
+app.post('/api/create-session', (req, res) => {
+    const sessionId = generateSessionId();
+    const userSession = getUserSession(sessionId);
+    
+    console.log('Nova sessão HTTP criada:', sessionId);
+    
+    res.json({ 
+        success: true, 
+        sessionId: sessionId,
+        message: 'Sessão criada com sucesso'
+    });
+});
+
+// Rota para enviar eventos (substitui socket.emit)
+app.post('/api/socket-event', (req, res) => {
+    const { sessionId, event, data } = req.body;
+    
+    if (!sessionId || !userSessions.has(sessionId)) {
+        return res.status(400).json({ error: 'Sessão inválida' });
+    }
+    
+    const userSession = getUserSession(sessionId);
+    
+    console.log(`Evento recebido para sessão ${sessionId}:`, event);
+    
+    // Processar eventos
+    switch (event) {
+        case 'updateConfig':
+            userSession.configBot = { ...userSession.configBot, ...data };
+            
+            // Adicionar resposta à fila de eventos
+            if (!userSession.eventQueue) userSession.eventQueue = [];
+            userSession.eventQueue.push({
+                event: 'configUpdated',
+                data: {
+                    capitalInicial: userSession.configBot.capitalInicial,
+                    riskLevel: userSession.configBot.riskLevel,
+                    hasApiKeys: !!(userSession.configBot.apiKey && userSession.configBot.apiSecret)
+                }
+            });
+            break;
+            
+        case 'startBot':
+            userSession.botAtivo = true;
+            userSession.configBot = { ...userSession.configBot, ...data };
+            
+            if (!userSession.eventQueue) userSession.eventQueue = [];
+            userSession.eventQueue.push({
+                event: 'botStarted',
+                data: {
+                    ativo: true,
+                    config: {
+                        capitalInicial: userSession.configBot.capitalInicial,
+                        riskLevel: userSession.configBot.riskLevel,
+                        hasApiKeys: !!(userSession.configBot.apiKey && userSession.configBot.apiSecret)
+                    }
+                }
+            });
+            
+            // Simular dados de teste após 2 segundos
+            setTimeout(() => {
+                const dadosTeste = {
+                    posicoesAbertas: [
+                        { par: 'BTC/USDT', tipo: 'buy', quantidade: 0.001, precoAbertura: 45000, delta: 0.85 },
+                        { par: 'ETH/USDT', tipo: 'sell', quantidade: 0.05, precoAbertura: 2800, delta: 0.72 }
+                    ],
+                    historicoTrades: [
+                        { par: 'BNB/USDT', tipo: 'buy', quantidade: 0.1, precoAbertura: 320, precoFechamento: 335, lucro: 1.5 },
+                        { par: 'ADA/USDT', tipo: 'sell', quantidade: 100, precoAbertura: 0.45, precoFechamento: 0.42, lucro: 3.0 }
+                    ],
+                    capitalAtual: userSession.configBot.capitalInicial + 4.5,
+                    diagrama: [
+                        { passo: 'Análise Wyckoff', cor: '#00ff88' },
+                        { passo: 'Delta/GEX', cor: '#ffaa00' },
+                        { passo: 'Execução', cor: '#00c8ff' }
+                    ]
+                };
+                
+                userSession.eventQueue.push({
+                    event: 'update',
+                    data: dadosTeste
+                });
+            }, 2000);
+            break;
+            
+        case 'pauseBot':
+            userSession.botAtivo = false;
+            
+            if (!userSession.eventQueue) userSession.eventQueue = [];
+            userSession.eventQueue.push({
+                event: 'botPaused',
+                data: { ativo: false }
+            });
+            break;
+    }
+    
+    res.json({ success: true, message: 'Evento processado' });
+});
+
+// Rota para polling de eventos (substitui socket.on)
+app.get('/api/poll-events', (req, res) => {
+    const { sessionId } = req.query;
+    
+    if (!sessionId || !userSessions.has(sessionId)) {
+        return res.status(400).json({ error: 'Sessão inválida' });
+    }
+    
+    const userSession = getUserSession(sessionId);
+    
+    // Retornar eventos pendentes
+    const events = userSession.eventQueue || [];
+    userSession.eventQueue = []; // Limpar fila após enviar
+    
+    res.json(events);
+});
+
 // Configurações do bot
 const nivelCapital = { medio: 0.01, alto: 0.02, superior: 0.035 };
 const pares = ["BTC/USDT","ETH/USDT","BNB/USDT","ADA/USDT","SOL/USDT",
@@ -153,7 +259,7 @@ async function calcularATR(par){
     }
 }
 
-// Sistema de sessões por usuário
+// Sistema de sessões por usuário (HTTP)
 const userSessions = new Map();
 
 // Função para gerar ID único de sessão
@@ -175,119 +281,24 @@ function getUserSession(sessionId) {
             },
             historicoTrades: [],
             posicoesAbertas: [],
-            capitalAtual: 500
+            capitalAtual: 500,
+            eventQueue: [] // Fila de eventos para polling
         });
     }
     return userSessions.get(sessionId);
 }
 
-// Configuração do Socket.IO com sessões isoladas
-io.on('connection', (socket) => {
-    console.log('Cliente conectado:', socket.id);
-    
-    // Gerar ID de sessão único para este usuário
-    const sessionId = generateSessionId();
-    socket.sessionId = sessionId;
-    
-    // Juntar o usuário à sua sala privada
-    socket.join(sessionId);
-    
-    // Obter sessão do usuário
-    const userSession = getUserSession(sessionId);
-    
-    // Enviar ID da sessão e estado atual do bot para este usuário específico
-    socket.emit('sessionCreated', { sessionId });
-    socket.emit('botStatus', {
-        ativo: userSession.botAtivo,
-        config: {
-            // Nunca enviar credenciais reais, apenas status
-            capitalInicial: userSession.configBot.capitalInicial,
-            riskLevel: userSession.configBot.riskLevel,
-            hasApiKeys: !!(userSession.configBot.apiKey && userSession.configBot.apiSecret)
+// Limpeza automática de sessões inativas
+setInterval(() => {
+    const now = Date.now();
+    for (const [sessionId, session] of userSessions.entries()) {
+        // Remover sessões inativas há mais de 30 minutos
+        if (now - session.lastActivity > 30 * 60 * 1000) {
+            console.log(`Removendo sessão inativa: ${sessionId}`);
+            userSessions.delete(sessionId);
         }
-    });
-    
-    // Receber configurações atualizadas (isoladas por usuário)
-    socket.on('updateConfig', (novaConfig) => {
-        console.log(`Configurações atualizadas para sessão ${sessionId}`);
-        const userSession = getUserSession(sessionId);
-        
-        // Atualizar apenas a sessão deste usuário
-        userSession.configBot = { ...userSession.configBot, ...novaConfig };
-        
-        // Confirmar apenas para este cliente específico
-        socket.emit('configUpdated', {
-            capitalInicial: userSession.configBot.capitalInicial,
-            riskLevel: userSession.configBot.riskLevel,
-            hasApiKeys: !!(userSession.configBot.apiKey && userSession.configBot.apiSecret)
-        });
-    });
-    
-    // Iniciar bot (isolado por usuário)
-    socket.on('startBot', (config) => {
-        console.log(`Iniciando bot para sessão ${sessionId}`);
-        const userSession = getUserSession(sessionId);
-        
-        userSession.botAtivo = true;
-        userSession.configBot = { ...userSession.configBot, ...config };
-        
-        // Confirmar apenas para este usuário específico
-        socket.emit('botStarted', { 
-            ativo: true, 
-            config: {
-                capitalInicial: userSession.configBot.capitalInicial,
-                riskLevel: userSession.configBot.riskLevel,
-                hasApiKeys: !!(userSession.configBot.apiKey && userSession.configBot.apiSecret)
-            }
-        });
-        
-        // Iniciar dados de teste para este usuário
-        setTimeout(() => {
-            const dadosTeste = {
-                posicoesAbertas: [
-                    { par: 'BTC/USDT', tipo: 'buy', quantidade: 0.001, precoAbertura: 45000, delta: 0.85 },
-                    { par: 'ETH/USDT', tipo: 'sell', quantidade: 0.05, precoAbertura: 2800, delta: 0.72 }
-                ],
-                historicoTrades: [
-                    { par: 'BNB/USDT', tipo: 'buy', quantidade: 0.1, precoAbertura: 320, precoFechamento: 335, lucro: 1.5 },
-                    { par: 'ADA/USDT', tipo: 'sell', quantidade: 100, precoAbertura: 0.45, precoFechamento: 0.42, lucro: 3.0 }
-                ],
-                capitalAtual: userSession.configBot.capitalInicial + 4.5,
-                diagrama: [
-                    { passo: 'Análise Wyckoff', cor: '#00ff88' },
-                    { passo: 'Delta/GEX', cor: '#ffaa00' },
-                    { passo: 'Execução', cor: '#00c8ff' }
-                ]
-            };
-            
-            // Enviar dados apenas para este usuário específico
-            socket.emit('update', dadosTeste);
-        }, 2000);
-    });
-    
-    // Pausar bot (isolado por usuário)
-    socket.on('pauseBot', () => {
-        console.log(`Pausando bot para sessão ${sessionId}`);
-        const userSession = getUserSession(sessionId);
-        
-        userSession.botAtivo = false;
-        
-        // Confirmar apenas para este usuário específico
-        socket.emit('botPaused', { ativo: false });
-    });
-    
-    socket.on('disconnect', () => {
-        console.log(`Cliente desconectado: ${socket.id} (sessão: ${sessionId})`);
-        
-        // Opcional: Limpar sessão após um tempo de inatividade
-        setTimeout(() => {
-            if (userSessions.has(sessionId)) {
-                console.log(`Limpando sessão inativa: ${sessionId}`);
-                userSessions.delete(sessionId);
-            }
-        }, 30 * 60 * 1000); // 30 minutos
-    });
-});
+    }
+}, 5 * 60 * 1000); // Verificar a cada 5 minutos
 
 // Função de teste
 function testarEstrategias() {
@@ -320,8 +331,8 @@ function testarEstrategias() {
 // Inicialização
 if (process.env.NODE_ENV !== 'production') {
     const PORT = process.env.PORT || 3000;
-    server.listen(PORT, () => {
-        console.log(`Painel rodando em http://localhost:${PORT}`);
+    app.listen(PORT, () => {
+        console.log(`Painel HTTP rodando em http://localhost:${PORT}`);
         testarEstrategias();
     });
 }
