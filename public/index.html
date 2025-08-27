@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bot Binance - Painel Futurístico</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+<style>
+:root {
+    --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --secondary-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    --success-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    --danger-gradient: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+    --dark-bg: #0a0a0a;
+    --card-bg: #1a1a2e;
+    --card-hover: #16213e;
+    --text-color: #ffffff;
+    --text-secondary: #b8b8b8;
+    --border-color: #2a2a3e;
+    --accent-color: #00d4ff;
+    --border-radius: 16px;
+    --box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    --glow-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+    --transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-theme="light"] {
+    --dark-bg: #f8fafc;
+    --card-bg: #ffffff;
+    --card-hover: #f1f5f9;
+    --text-color: #1e293b;
+    --text-secondary: #64748b;
+    --border-color: #e2e8f0;
+    --box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    --glow-shadow: 0 0 20px rgba(0, 212, 255, 0.2);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body { 
+    font-family: 'Inter', sans-serif; 
+    background: var(--dark-bg); 
+    color: var(--text-color); 
+    line-height: 1.6;
+    overflow-x: hidden;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 40px;
+    padding: 20px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.header h1 {
+    background: var(--primary-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin: 0 0 0.5rem 0;
+}
+
+.subtitle {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    font-weight: 400;
+    opacity: 0.8;
+    letter-spacing: 1px;
+    margin: 0;
+}
+
+.header-controls {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+.theme-toggle, .settings-btn {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    padding: 12px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: var(--transition);
+    font-size: 1.1rem;
+}
+
+.theme-toggle:hover, .settings-btn:hover {
+    background: var(--card-hover);
+    box-shadow: var(--glow-shadow);
+    transform: translateY(-2px);
+}
+
+.card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: var(--box-shadow);
+    transition: var(--transition);
+    backdrop-filter: blur(10px);
+}
+
+.card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--glow-shadow), var(--box-shadow);
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.card-title {
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: var(--text-color);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.card-title i {
+    color: var(--accent-color);
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 24px;
+    margin-bottom: 24px;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 24px;
+}
+
+.stat-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 20px;
+    text-align: center;
+    transition: var(--transition);
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--glow-shadow);
+}
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.stat-label {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+table { 
+    width: 100%; 
+    border-collapse: collapse; 
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    background: var(--card-bg);
+}
+
+th, td { 
+    border: 1px solid var(--border-color); 
+    padding: 16px; 
+    text-align: left; 
+}
+
+th { 
+    background: var(--card-hover); 
+    font-weight: 600;
+    color: var(--accent-color);
+    text-transform: uppercase;
+    font-size: 0.85rem;
+    letter-spacing: 0.5px;
+}
+
+tr:hover {
+    background-color: var(--card-hover);
+}
+
+.bot-controls {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    margin-bottom: 30px;
+}
+
+.control-btn {
+    padding: 15px 30px;
+    border: none;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.start-btn {
+    background: var(--success-gradient);
+    color: white;
+}
+
+.pause-btn {
+    background: var(--danger-gradient);
+    color: white;
+}
+
+.control-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--glow-shadow);
+}
+
+.control-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(5px);
+}
+
+.modal-content {
+    background: var(--card-bg);
+    margin: 5% auto;
+    padding: 30px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    width: 90%;
+    max-width: 500px;
+    box-shadow: var(--box-shadow);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.close {
+    color: var(--text-secondary);
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.close:hover {
+    color: var(--accent-color);
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: var(--text-color);
+}
+
+.form-group input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--dark-bg);
+    color: var(--text-color);
+    font-size: 1rem;
+    transition: var(--transition);
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.1);
+}
+
+.btn-primary {
+    background: var(--primary-gradient);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    width: 100%;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--glow-shadow);
+}
+
+.status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.status-active {
+    background: rgba(0, 242, 254, 0.2);
+    color: #00f2fe;
+    border: 1px solid rgba(0, 242, 254, 0.3);
+}
+
+.status-inactive {
+    background: rgba(250, 112, 154, 0.2);
+    color: #fa709a;
+    border: 1px solid rgba(250, 112, 154, 0.3);
+}
+
+#spriteContainer { 
+    display: flex; 
+    flex-wrap: wrap; 
+    gap: 15px; 
+    justify-content: center;
+    padding: 20px;
+}
+
+.sprite { 
+    width: 64px; 
+    height: 64px; 
+    background-size: contain; 
+    background-repeat: no-repeat; 
+    background-position: center; 
+    transition: var(--transition);
+    border-radius: var(--border-radius);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+}
+
+.sprite:hover {
+    transform: scale(1.1) rotate(5deg);
+}
+
+.sprite-buy { 
+    background: rgba(79, 172, 254, 0.2); 
+    border: 2px solid #4facfe; 
+}
+
+.sprite-sell { 
+    background: rgba(250, 112, 154, 0.2); 
+    border: 2px solid #fa709a; 
+}
+
+/* Carrossel de Ativos */
+.assets-carousel-container {
+    margin: 1rem 0 2rem 0;
+    background: var(--card-bg);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+    box-shadow: var(--box-shadow);
+}
+
+.carousel-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.8rem 1rem;
+    background: linear-gradient(135deg, rgba(0, 255, 136, 0.1), rgba(0, 200, 255, 0.1));
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-color);
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    background: #00ff88;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+    margin-left: auto;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(1.2); }
+}
+
+.assets-carousel {
+    height: 50px;
+    overflow: hidden;
+    position: relative;
+    background: var(--card-bg);
+}
+
+.carousel-track {
+    display: flex;
+    align-items: center;
+    height: 100%;
+    animation: scroll 30s linear infinite;
+    gap: 2rem;
+    padding: 0 1rem;
+    white-space: nowrap;
+}
+
+@keyframes scroll {
+    0% { transform: translateX(100%); }
+    100% { transform: translateX(-100%); }
+}
+
+.asset-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.8rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    transition: all 0.3s ease;
+    flex-shrink: 0;
+}
+
+.asset-item.analyzing {
+    background: linear-gradient(135deg, rgba(255, 170, 0, 0.2), rgba(255, 136, 0, 0.1));
+    border-color: rgba(255, 170, 0, 0.3);
+    color: #ffaa00;
+}
+
+.asset-item.opportunity {
+    background: linear-gradient(135deg, rgba(0, 255, 136, 0.2), rgba(0, 200, 255, 0.1));
+    border-color: rgba(0, 255, 136, 0.3);
+    color: #00ff88;
+    animation: glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes glow {
+    from {
+        box-shadow: 0 0 5px rgba(0, 255, 136, 0.3);
+    }
+    to {
+        box-shadow: 0 0 15px rgba(0, 255, 136, 0.6), 0 0 25px rgba(0, 255, 136, 0.3);
+    }
+}
+
+.asset-icon {
+    font-size: 0.8rem;
+}
+
+@media (max-width: 768px) {
+    .container {
+        padding: 15px;
+    }
+    
+    .header {
+        flex-direction: column;
+        gap: 20px;
+        text-align: center;
+    }
+    
+    .header h1 {
+        font-size: 2rem;
+    }
+    
+    .grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .bot-controls {
+        flex-direction: column;
+    }
+    
+    .control-btn {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    table {
+        font-size: 14px;
+    }
+    
+    th, td {
+        padding: 12px 8px;
+    }
+    
+    .sprite {
+        width: 48px;
+        height: 48px;
+        font-size: 1.2rem;
+    }
+    
+    .modal-content {
+        margin: 10% auto;
+        padding: 20px;
+    }
+}
+</style>
+</head>
+<body data-theme="dark">
+<div class="container">
+  <header class="header">
+    <h1><i class="fas fa-robot"></i> Bot Binance Futurístico</h1>
+    <p class="subtitle">Análise Wyckoff • Delta Flow • GEX Analysis • ATR Risk Management • Smart Alerts</p>
+    <div class="header-controls">
+      <button class="theme-toggle" onclick="toggleTheme()">
+        <i class="fas fa-moon" id="theme-icon"></i>
+      </button>
+      <button class="settings-btn" onclick="openSettings()">
+        <i class="fas fa-cog"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- Carrossel de Ativos -->
+  <div class="assets-carousel-container">
+    <div class="carousel-header">
+      <i class="fas fa-chart-line"></i>
+      <span>Analisando Mercado</span>
+      <div class="status-dot"></div>
+    </div>
+    <div class="assets-carousel">
+      <div class="carousel-track" id="carouselTrack">
+        <!-- Ativos serão inseridos dinamicamente -->
+      </div>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-value" id="capital">0</div>
+      <div class="stat-label">Capital Atual (USDT)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="totalTrades">0</div>
+      <div class="stat-label">Total de Trades</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="posicoesAbertas">0</div>
+      <div class="stat-label">Posições Abertas</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="lucroDiario">0</div>
+      <div class="stat-label">Lucro Hoje (USDT)</div>
+    </div>
+  </div>
+
+  <div class="bot-controls">
+    <button class="control-btn start-btn" id="startBtn" onclick="startBot()">
+      <i class="fas fa-play"></i> Iniciar Bot
+    </button>
+    <button class="control-btn pause-btn" id="pauseBtn" onclick="pauseBot()" disabled>
+      <i class="fas fa-pause"></i> Pausar Bot
+    </button>
+    <div class="status-indicator status-inactive" id="botStatus">
+      <i class="fas fa-circle"></i> Bot Inativo
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">
+          <i class="fas fa-chart-line"></i> Posições Abertas
+        </h3>
+      </div>
+      <table id="abertas">
+        <thead>
+          <tr><th>Par</th><th>Tipo</th><th>Quantidade</th><th>Preço Abertura</th><th>Status</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">
+          <i class="fas fa-history"></i> Histórico de Trades
+        </h3>
+      </div>
+      <table id="historico">
+        <thead>
+          <tr><th>Par</th><th>Tipo</th><th>Qtd</th><th>Abertura</th><th>Fechamento</th><th>Lucro</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-title">
+        <i class="fas fa-chart-area"></i> Gráfico de Performance
+      </h3>
+    </div>
+    <canvas id="graficoLucro" width="800" height="300"></canvas>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-title">
+        <i class="fas fa-tachometer-alt"></i> Força das Posições
+      </h3>
+    </div>
+    <div id="barrasForca"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-title">
+        <i class="fas fa-cubes"></i> Visualização TestSprite
+      </h3>
+    </div>
+    <div id="spriteContainer"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-title">
+        <i class="fas fa-sitemap"></i> Fluxo do Sistema
+      </h3>
+    </div>
+    <div id="diagramaFluxo"></div>
+  </div>
+</div>
+
+<!-- Modal de Configurações -->
+<div id="settingsModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3><i class="fas fa-cog"></i> Configurações da API</h3>
+      <span class="close" onclick="closeSettings()">&times;</span>
+    </div>
+    <form id="settingsForm">
+      <div class="form-group">
+        <label for="apiKey">Chave da API Binance:</label>
+        <input type="password" id="apiKey" placeholder="Sua chave da API">
+      </div>
+      <div class="form-group">
+        <label for="apiSecret">Secret da API Binance:</label>
+        <input type="password" id="apiSecret" placeholder="Seu secret da API">
+      </div>
+      <div class="form-group">
+        <label for="capitalInicial">Capital Inicial (USDT):</label>
+        <input type="number" id="capitalInicial" placeholder="500" min="20">
+      </div>
+      <div class="form-group">
+        <label for="riskLevel">Nível de Risco:</label>
+        <select id="riskLevel" style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--dark-bg); color: var(--text-color);">
+          <option value="medio">Médio (1%)</option>
+          <option value="alto">Alto (2%)</option>
+          <option value="superior">Superior (3.5%)</option>
+        </select>
+      </div>
+      <button type="submit" class="btn-primary">
+        <i class="fas fa-save"></i> Salvar Configurações
+      </button>
+    </form>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
