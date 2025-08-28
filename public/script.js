@@ -240,32 +240,54 @@ function saveSettings(event) {
     const capitalInicial = parseFloat(document.getElementById('capitalInicial').value);
     const riskLevel = document.getElementById('riskLevel').value;
     
-    // Atualizar configurações locais (apenas para esta sessão)
-    if (apiKey) botConfig.apiKey = apiKey;
-    if (apiSecret) botConfig.apiSecret = apiSecret;
+    // Validar se as chaves foram preenchidas
+    if (!apiKey || !apiSecret) {
+        showNotification('Por favor, preencha a API Key e Secret da Binance!', 'error');
+        return;
+    }
+    
+    // Atualizar configurações locais
+    botConfig.apiKey = apiKey;
+    botConfig.apiSecret = apiSecret;
     botConfig.capitalInicial = capitalInicial;
     botConfig.riskLevel = riskLevel;
     
     // Atualizar configurações seguras
     safeConfig.capitalInicial = capitalInicial;
     safeConfig.riskLevel = riskLevel;
-    safeConfig.hasApiKeys = !!(botConfig.apiKey && botConfig.apiSecret);
+    safeConfig.hasApiKeys = true;
     
-    // NUNCA salvar credenciais no localStorage por segurança
+    // Salvar configurações não sensíveis no localStorage
     const safeConfigToSave = {
         capitalInicial: capitalInicial,
-        riskLevel: riskLevel
-        // Credenciais NUNCA são salvas localmente
+        riskLevel: riskLevel,
+        hasApiKeys: true // Indicar que as chaves foram configuradas
     };
     localStorage.setItem('botSafeConfig', JSON.stringify(safeConfigToSave));
     
     // Enviar configurações para o servidor (isoladas por sessão)
-    socket.emit('updateConfig', botConfig);
+    socket.emit('updateConfig', botConfig).then(() => {
+        closeSettings();
+        showNotification('Configurações salvas com sucesso!', 'success');
+        
+        // Atualizar placeholders para mostrar que as chaves estão configuradas
+        setTimeout(() => {
+            updatePlaceholders();
+        }, 500);
+    }).catch(() => {
+        showNotification('Erro ao salvar configurações. Tente novamente.', 'error');
+    });
+}
+
+// Função para atualizar placeholders
+function updatePlaceholders() {
+    const apiKeyField = document.getElementById('apiKey');
+    const apiSecretField = document.getElementById('apiSecret');
     
-    closeSettings();
-    
-    // Mostrar notificação
-    showNotification('Configurações salvas com sucesso!', 'success');
+    if (apiKeyField && apiSecretField && safeConfig.hasApiKeys) {
+        apiKeyField.placeholder = 'Chaves configuradas - Digite nova chave para alterar';
+        apiSecretField.placeholder = 'Secret configurado - Digite novo secret para alterar';
+    }
 }
 
 // Carregar configurações salvas (apenas dados seguros)
@@ -275,11 +297,18 @@ function loadConfig() {
         const safe = JSON.parse(savedConfig);
         safeConfig.capitalInicial = safe.capitalInicial || 500;
         safeConfig.riskLevel = safe.riskLevel || 'medio';
+        safeConfig.hasApiKeys = safe.hasApiKeys || false;
         
         // Atualizar botConfig apenas com dados não sensíveis
         botConfig.capitalInicial = safeConfig.capitalInicial;
         botConfig.riskLevel = safeConfig.riskLevel;
         // Credenciais NUNCA são carregadas do localStorage
+        
+        console.log('Configurações carregadas:', {
+            capital: safeConfig.capitalInicial,
+            risk: safeConfig.riskLevel,
+            hasKeys: safeConfig.hasApiKeys
+        });
     }
 }
 
