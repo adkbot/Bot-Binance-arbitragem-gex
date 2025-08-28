@@ -15,12 +15,8 @@ const client = {
 const twilioWhatsApp = process.env.TWILIO_WHATSAPP;
 const meuWhatsApp = process.env.MEU_WHATSAPP;
 
-// Configuração da Binance
-const binance = new ccxt.binance({
-  apiKey: process.env.BINANCE_API_KEY,
-  secret: process.env.BINANCE_API_SECRET,
-  options: { defaultType: "spot" }
-});
+// Configuração da Binance será feita por demanda (sem variáveis globais)
+// Evita erros quando as chaves não estão configuradas
 
 // Configuração do Express
 const app = express();
@@ -245,15 +241,25 @@ async function calcularValorTrade(nivel){
     return capitalAtual * nivelCapital[nivel];
 }
 
-async function calcularATR(par){
+async function calcularATR(par, userSession){
     try {
-        const ohlcv = await binance.fetchOHLCV(par, '1h', undefined, 14);
-        let atr = 0;
-        for(let i = 1; i < ohlcv.length; i++){
-            const tr = Math.max(ohlcv[i][2] - ohlcv[i][3], Math.abs(ohlcv[i][2] - ohlcv[i-1][4]), Math.abs(ohlcv[i][3] - ohlcv[i-1][4]));
-            atr += tr;
+        // Criar instância temporária da Binance se as chaves estiverem disponíveis
+        if (userSession.configBot.apiKey && userSession.configBot.apiSecret) {
+            const tempExchange = new ccxt.binance({
+                apiKey: userSession.configBot.apiKey,
+                secret: userSession.configBot.apiSecret,
+                options: { defaultType: "spot" }
+            });
+            
+            const ohlcv = await tempExchange.fetchOHLCV(par, '1h', undefined, 14);
+            let atr = 0;
+            for(let i = 1; i < ohlcv.length; i++){
+                const tr = Math.max(ohlcv[i][2] - ohlcv[i][3], Math.abs(ohlcv[i][2] - ohlcv[i-1][4]), Math.abs(ohlcv[i][3] - ohlcv[i-1][4]));
+                atr += tr;
+            }
+            return atr / (ohlcv.length - 1);
         }
-        return atr / (ohlcv.length - 1);
+        return 0.01; // Valor padrão quando não há chaves configuradas
     } catch {
         return 0.01;
     }
