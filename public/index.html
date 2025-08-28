@@ -250,6 +250,16 @@ tr:hover {
     box-shadow: var(--glow-shadow);
 }
 
+/* Ajuste específico para o card do gráfico */
+.card:has(#graficoLucro) {
+    max-height: 280px;
+}
+
+#graficoLucro {
+    max-height: 200px !important;
+    height: 200px !important;
+}
+
 .control-btn:disabled {
     opacity: 0.6;
     cursor: not-allowed;
@@ -651,7 +661,7 @@ tr:hover {
         <i class="fas fa-chart-area"></i> Gráfico de Performance
       </h3>
     </div>
-    <canvas id="graficoLucro" width="800" height="300"></canvas>
+    <canvas id="graficoLucro" width="800" height="200"></canvas>
   </div>
 
   <div class="card">
