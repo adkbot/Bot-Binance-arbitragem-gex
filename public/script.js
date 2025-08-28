@@ -318,14 +318,14 @@ async function saveSettings(event) {
     }
 }
 
-// Função para limpar chaves salvas
+// Função para limpar chaves salvas (agora usa backend)
 function clearSavedKeys() {
-    localStorage.removeItem('secureApiKeys');
+    // Limpar apenas as variáveis locais
     botConfig.apiKey = '';
     botConfig.apiSecret = '';
     safeConfig.hasApiKeys = false;
-    console.log('🗑️ Chaves removidas com sucesso');
-    showNotification('Chaves API removidas da memória', 'warning');
+    console.log('🗑️ Chaves removidas da sessão local');
+    showNotification('Chaves removidas da sessão - use o backend para limpeza permanente', 'warning');
 }
 
 // Função para atualizar placeholders
@@ -346,56 +346,10 @@ function updatePlaceholders() {
     }
 }
 
-// Funções de criptografia simples para as chaves
-function encryptKeys(apiKey, apiSecret) {
-    const data = {
-        apiKey: apiKey,
-        apiSecret: apiSecret,
-        timestamp: Date.now()
-    };
-    return btoa(JSON.stringify(data));
-}
-
-function decryptKeys(encrypted) {
-    try {
-        const data = JSON.parse(atob(encrypted));
-        // Verificar se não expirou (24 horas)
-        if (Date.now() - data.timestamp < 24 * 60 * 60 * 1000) {
-            return {
-                apiKey: data.apiKey,
-                apiSecret: data.apiSecret
-            };
-        }
-    } catch (error) {
-        console.log('Erro ao descriptografar chaves:', error);
-    }
-    return null;
-}
-
-// Salvar chaves de forma segura
-function saveKeysSecurely(apiKey, apiSecret) {
-    if (apiKey && apiSecret) {
-        const encrypted = encryptKeys(apiKey, apiSecret);
-        localStorage.setItem('secureApiKeys', encrypted);
-        console.log('🔐 Chaves salvas de forma segura');
-    }
-}
-
-// Carregar chaves de forma segura
-function loadKeysSecurely() {
-    const encrypted = localStorage.getItem('secureApiKeys');
-    if (encrypted) {
-        const keys = decryptKeys(encrypted);
-        if (keys) {
-            console.log('🔓 Chaves carregadas com sucesso');
-            return keys;
-        } else {
-            console.log('🕐 Chaves expiraram, removendo...');
-            localStorage.removeItem('secureApiKeys');
-        }
-    }
-    return null;
-}
+// FUNÇÕES DE CRIPTOGRAFIA INSEGURA REMOVIDAS
+// As funções encryptKeys, decryptKeys, saveKeysSecurely e loadKeysSecurely
+// foram removidas por serem inseguras (usavam Base64, não criptografia real)
+// As chaves agora são salvas APENAS no backend de forma segura
 
 // Carregar configurações salvas do servidor
 async function loadConfig() {
@@ -512,19 +466,11 @@ async function startBot() {
         return;
     }
     
-    // Validar saldo real na API
-    console.log('🔍 Validando saldo na Binance...');
-    const balanceData = await validateBalance();
-    if (!balanceData) {
-        return; // Erro já mostrado na função validateBalance
-    }
-    
-    if (balanceData.usdtBalance < 20) {
-        showNotification(`Saldo insuficiente na Binance: $${balanceData.usdtBalance.toFixed(2)} (mínimo: $20)`, 'error');
-        return;
-    }
-    
-    showNotification(`Saldo validado: $${balanceData.usdtBalance.toFixed(2)} USDT disponível`, 'success');
+    // VALIDAÇÃO DE SALDO REMOVIDA
+    // A validação obrigatória foi removida para permitir que o bot inicie
+    // O saldo será validado pelo backend quando necessário
+    console.log('⚠️ Iniciando bot sem validação prévia de saldo');
+    console.log('💡 O backend validará o saldo durante as operações reais');
     
     botActive = true;
     document.getElementById('startBtn').disabled = true;
@@ -537,11 +483,9 @@ async function startBot() {
     // Iniciar carrossel
     startCarousel();
     
-    // Inicializar dados de teste para visualização
-    initializeTestData();
-    
+    // Enviar comando para o backend iniciar o bot REAL
     socket.emit('startBot', botConfig);
-    showNotification('Bot iniciado com sucesso!', 'success');
+    showNotification('Bot iniciado - aguardando dados reais do servidor...', 'success');
 }
 
 // Pausar bot
@@ -932,38 +876,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// Inicializar dados de teste para visualização
-function initializeTestData() {
-    // Dados de teste para o gráfico de performance
-    const testData = {
-        posicoesAbertas: [
-            { par: 'BTCUSDT', tipo: 'buy', quantidade: 0.001, precoAbertura: 45000, delta: 0.85 },
-            { par: 'ETHUSDT', tipo: 'sell', quantidade: 0.05, precoAbertura: 2800, delta: 0.72 }
-        ],
-        historicoTrades: [
-            { par: 'BNBUSDT', tipo: 'buy', quantidade: 0.1, precoAbertura: 320, precoFechamento: 335, lucro: 1.5 },
-            { par: 'ADAUSDT', tipo: 'sell', quantidade: 100, precoAbertura: 0.45, precoFechamento: 0.42, lucro: 3.0 },
-            { par: 'SOLUSDT', tipo: 'buy', quantidade: 0.5, precoAbertura: 95, precoFechamento: 102, lucro: 3.5 }
-        ],
-        capitalAtual: botConfig.capitalInicial + 8.0,
-        diagrama: [
-            { passo: 'Análise Wyckoff', cor: '#00ff88' },
-            { passo: 'Delta/GEX', cor: '#ffaa00' },
-            { passo: 'Execução', cor: '#00c8ff' }
-        ]
-    };
-    
-    // Simular evento de atualização
-    setTimeout(() => {
-        const event = new CustomEvent('update', { detail: testData });
-        socket.emit = socket.emit || function() {}; // Fallback
-        
-        // Atualizar interface diretamente
-        updateInterface(testData);
-        
-        showNotification('Dados de teste carregados para demonstração', 'success');
-    }, 1000);
-}
+// FUNÇÃO DE DADOS DE TESTE REMOVIDA
+// Esta função foi removida para mostrar apenas dados reais do backend
+// Agora a interface só será atualizada com dados verdadeiros do servidor
 
 // Função para atualizar interface
 function updateInterface(data) {
