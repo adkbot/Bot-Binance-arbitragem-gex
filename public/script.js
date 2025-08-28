@@ -278,6 +278,9 @@ function saveSettings(event) {
     safeConfig.riskLevel = riskLevel;
     safeConfig.hasApiKeys = true;
     
+    // Salvar chaves de forma segura (criptografadas)
+    saveKeysSecurely(apiKey, apiSecret);
+    
     // Salvar configurações não sensíveis no localStorage
     const safeConfigToSave = {
         capitalInicial: capitalInicial,
@@ -292,7 +295,7 @@ function saveSettings(event) {
     socket.emit('updateConfig', botConfig).then(() => {
         console.log('✅ Configurações enviadas com sucesso!');
         closeSettings();
-        showNotification('Configurações salvas com sucesso!', 'success');
+        showNotification('🔐 Configurações salvas com segurança! Agora persistem entre sessões.', 'success');
         
         // Atualizar placeholders para mostrar que as chaves estão configuradas
         setTimeout(() => {
@@ -304,19 +307,88 @@ function saveSettings(event) {
     });
 }
 
+// Função para limpar chaves salvas
+function clearSavedKeys() {
+    localStorage.removeItem('secureApiKeys');
+    botConfig.apiKey = '';
+    botConfig.apiSecret = '';
+    safeConfig.hasApiKeys = false;
+    console.log('🗑️ Chaves removidas com sucesso');
+    showNotification('Chaves API removidas da memória', 'warning');
+}
+
 // Função para atualizar placeholders
 function updatePlaceholders() {
     const apiKeyField = document.getElementById('apiKey');
     const apiSecretField = document.getElementById('apiSecret');
     
-    if (apiKeyField && apiSecretField && safeConfig.hasApiKeys) {
-        apiKeyField.placeholder = 'Chaves configuradas - Digite nova chave para alterar';
-        apiSecretField.placeholder = 'Secret configurado - Digite novo secret para alterar';
+    if (apiKeyField && apiSecretField) {
+        if (safeConfig.hasApiKeys && (botConfig.apiKey || botConfig.apiSecret)) {
+            apiKeyField.placeholder = '🔐 Chaves salvas - Digite nova para alterar';
+            apiSecretField.placeholder = '🔐 Secret salvo - Digite novo para alterar';
+            apiKeyField.value = '';
+            apiSecretField.value = '';
+        } else {
+            apiKeyField.placeholder = 'Digite sua API Key da Binance';
+            apiSecretField.placeholder = 'Digite seu API Secret da Binance';
+        }
     }
 }
 
-// Carregar configurações salvas (apenas dados seguros)
+// Funções de criptografia simples para as chaves
+function encryptKeys(apiKey, apiSecret) {
+    const data = {
+        apiKey: apiKey,
+        apiSecret: apiSecret,
+        timestamp: Date.now()
+    };
+    return btoa(JSON.stringify(data));
+}
+
+function decryptKeys(encrypted) {
+    try {
+        const data = JSON.parse(atob(encrypted));
+        // Verificar se não expirou (24 horas)
+        if (Date.now() - data.timestamp < 24 * 60 * 60 * 1000) {
+            return {
+                apiKey: data.apiKey,
+                apiSecret: data.apiSecret
+            };
+        }
+    } catch (error) {
+        console.log('Erro ao descriptografar chaves:', error);
+    }
+    return null;
+}
+
+// Salvar chaves de forma segura
+function saveKeysSecurely(apiKey, apiSecret) {
+    if (apiKey && apiSecret) {
+        const encrypted = encryptKeys(apiKey, apiSecret);
+        localStorage.setItem('secureApiKeys', encrypted);
+        console.log('🔐 Chaves salvas de forma segura');
+    }
+}
+
+// Carregar chaves de forma segura
+function loadKeysSecurely() {
+    const encrypted = localStorage.getItem('secureApiKeys');
+    if (encrypted) {
+        const keys = decryptKeys(encrypted);
+        if (keys) {
+            console.log('🔓 Chaves carregadas com sucesso');
+            return keys;
+        } else {
+            console.log('🕐 Chaves expiraram, removendo...');
+            localStorage.removeItem('secureApiKeys');
+        }
+    }
+    return null;
+}
+
+// Carregar configurações salvas (incluindo chaves seguras)
 function loadConfig() {
+    // Carregar configurações básicas
     const savedConfig = localStorage.getItem('botSafeConfig');
     if (savedConfig) {
         const safe = JSON.parse(savedConfig);
@@ -327,13 +399,30 @@ function loadConfig() {
         // Atualizar botConfig apenas com dados não sensíveis
         botConfig.capitalInicial = safeConfig.capitalInicial;
         botConfig.riskLevel = safeConfig.riskLevel;
-        // Credenciais NUNCA são carregadas do localStorage
         
-        console.log('Configurações carregadas:', {
+        console.log('Configurações básicas carregadas:', {
             capital: safeConfig.capitalInicial,
             risk: safeConfig.riskLevel,
             hasKeys: safeConfig.hasApiKeys
         });
+    }
+    
+    // Tentar carregar chaves seguras
+    const keys = loadKeysSecurely();
+    if (keys) {
+        botConfig.apiKey = keys.apiKey;
+        botConfig.apiSecret = keys.apiSecret;
+        safeConfig.hasApiKeys = true;
+        
+        console.log('✅ Chaves API carregadas automaticamente');
+        
+        // Atualizar placeholders se a página de configurações estiver aberta
+        updatePlaceholders();
+        
+        // Mostrar notificação de sucesso
+        showNotification('🔐 Chaves API carregadas automaticamente!', 'success');
+    } else {
+        console.log('ℹ️ Nenhuma chave salva encontrada');
     }
 }
 

@@ -720,9 +720,14 @@ tr:hover {
           <option value="superior">Superior (3.5%)</option>
         </select>
       </div>
-      <button type="submit" class="btn-primary">
-        <i class="fas fa-save"></i> Salvar Configurações
-      </button>
+      <div style="display: flex; gap: 10px; margin-top: 15px;">
+        <button type="submit" class="btn-primary" style="flex: 1;">
+          <i class="fas fa-save"></i> Salvar Configurações
+        </button>
+        <button type="button" class="btn-secondary" onclick="clearSavedKeys()" style="flex: 0 0 auto; background: #e74c3c; border: none; padding: 12px 15px; border-radius: 8px; color: white; cursor: pointer;" title="Limpar chaves salvas">
+          <i class="fas fa-trash"></i>
+        </button>
+      </div>
     </form>
   </div>
 </div>
