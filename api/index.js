@@ -586,47 +586,64 @@ app.post('/api/socket-event', (req, res) => {
                             // Iniciar sistema (modo demo por enquanto)
                             await userSession.tradingSystem.start();
                             
-                            // Enviar dados iniciais
-                            userSession.eventQueue.push({
-                                event: 'update',
-                                data: {
-                                    posicoesAbertas: [],
-                                    historicoTrades: [],
-                                    capitalAtual: userSession.tradingSystem.capital,
-                                    diagrama: [
-                                        { passo: 'Sistema de IA Ativo', cor: '#00ff88' },
-                                        { passo: 'Analisando 30 Melhores Pares', cor: '#ffaa00' },
-                                        { passo: 'Wyckoff + ML Core', cor: '#00c8ff' }
-                                    ]
-                                }
-                            });
+                            // Aguardar inicialização completa antes de enviar dados
+                             setTimeout(() => {
+                                 if (userSession.botAtivo && userSession.tradingSystem) {
+                                     const stats = userSession.tradingSystem.getStats();
+                                     
+                                     userSession.eventQueue.push({
+                                         event: 'update',
+                                         data: {
+                                             posicoesAbertas: stats.realPositions || [],
+                                             historicoTrades: stats.tradeHistory || [],
+                                             capitalAtual: stats.capital,
+                                             totalTrades: stats.totalTrades,
+                                             lucroTotal: stats.totalProfit,
+                                             crescimentoComposto: stats.compoundGrowth,
+                                             diagrama: [
+                                                 { passo: `Capital: ${stats.capital.toFixed(2)} USDT`, cor: '#00ff88' },
+                                                 { passo: `Crescimento: ${stats.compoundGrowth.toFixed(2)}%`, cor: '#ffaa00' },
+                                                 { passo: `${stats.totalTrades} Trades Reais`, cor: '#00c8ff' }
+                                             ]
+                                         }
+                                     });
+                                 }
+                             }, 5000); // Aguardar 5s para sistema inicializar
                             
-                            // Iniciar monitoramento em tempo real
-                            userSession.tradingInterval = setInterval(() => {
-                                if (userSession.botAtivo && userSession.tradingSystem) {
-                                    const stats = userSession.tradingSystem.getStats();
-                                    
-                                    userSession.eventQueue.push({
-                                        event: 'update',
-                                        data: {
-                                            posicoesAbertas: [],
-                                            historicoTrades: [],
-                                            capitalAtual: userSession.tradingSystem.capital,
-                                            stats: {
-                                                selectedPairs: stats.selectedPairs,
-                                                activeOrders: stats.activeOrders,
-                                                trainingData: stats.trainingData,
-                                                marketDataPoints: stats.marketDataPoints
-                                            },
-                                            diagrama: [
-                                                { passo: `${stats.selectedPairs} Pares Ativos`, cor: '#00ff88' },
-                                                { passo: `${stats.marketDataPoints} Dados em Tempo Real`, cor: '#ffaa00' },
-                                                { passo: `${stats.trainingData} Amostras ML`, cor: '#00c8ff' }
-                                            ]
-                                        }
-                                    });
-                                }
-                            }, 30000); // Atualizar a cada 30 segundos
+                            // Iniciar monitoramento em tempo real com dados reais
+                             userSession.tradingInterval = setInterval(() => {
+                                 if (userSession.botAtivo && userSession.tradingSystem) {
+                                     const stats = userSession.tradingSystem.getStats();
+                                     
+                                     userSession.eventQueue.push({
+                                         event: 'update',
+                                         data: {
+                                             // APENAS DADOS REAIS
+                                             posicoesAbertas: stats.realPositions || [],
+                                             historicoTrades: stats.tradeHistory || [],
+                                             capitalAtual: stats.capital,
+                                             totalTrades: stats.totalTrades,
+                                             lucroTotal: stats.totalProfit,
+                                             crescimentoComposto: stats.compoundGrowth,
+                                             posicoesAbertasCount: stats.openPositions,
+                                             // Estatísticas do sistema
+                                             stats: {
+                                                 selectedPairs: stats.selectedPairs,
+                                                 activeOrders: stats.activeOrders,
+                                                 trainingData: stats.trainingData,
+                                                 marketDataPoints: stats.marketDataPoints,
+                                                 realPositions: stats.openPositions,
+                                                 totalRealTrades: stats.totalTrades
+                                             },
+                                             diagrama: [
+                                                  { passo: `Capital: ${stats.capital.toFixed(2)} USDT`, cor: stats.compoundGrowth >= 0 ? '#00ff88' : '#ff4444' },
+                                                  { passo: `Crescimento: ${stats.compoundGrowth.toFixed(2)}%`, cor: stats.compoundGrowth >= 0 ? '#00ff88' : '#ff4444' },
+                                                  { passo: `${stats.totalTrades} Trades | GEX Analysis`, cor: '#00c8ff' }
+                                              ]
+                                         }
+                                     });
+                                 }
+                             }, 15000); // Atualizar a cada 15 segundos para dados reais
                             
                         } else {
                             // Modo demo sem credenciais

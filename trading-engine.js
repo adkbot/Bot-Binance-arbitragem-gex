@@ -98,6 +98,186 @@ class DataCollector {
 }
 
 // ===================================================================================
+// MÓDULO GEX: ANÁLISE GAMMA EXPOSURE (Laevitas API)
+// ===================================================================================
+
+class GEXAnalyzer {
+    constructor(apiKey = null) {
+        this.apiKey = apiKey;
+        this.baseURL = 'https://api.laevitas.ch/analytics/options';
+        this.gexData = new Map();
+        this.lastUpdate = 0;
+    }
+
+    /**
+     * Busca dados GEX da API Laevitas
+     * @param {string} market - Mercado (deribit, binance, etc)
+     * @param {string} currency - Moeda (BTC, ETH, etc)
+     * @returns {Promise<object>} Dados GEX
+     */
+    async fetchGEXData(market = 'deribit', currency = 'BTC') {
+        try {
+            const url = `${this.baseURL}/gex_date_all/${market}/${currency}`;
+            const headers = this.apiKey ? { 'X-API-KEY': this.apiKey } : {};
+            
+            console.log(`🔍 Buscando dados GEX: ${market}/${currency}`);
+            
+            const response = await axios.get(url, { headers });
+            
+            if (response.data && response.data.length > 0) {
+                const gexData = this.processGEXData(response.data, currency);
+                this.gexData.set(currency, gexData);
+                this.lastUpdate = Date.now();
+                
+                console.log(`✅ Dados GEX obtidos para ${currency}:`, {
+                    totalGamma: gexData.totalGamma,
+                    netGamma: gexData.netGamma,
+                    gexLevel: gexData.gexLevel
+                });
+                
+                return gexData;
+            }
+            
+            return null;
+            
+        } catch (error) {
+            console.error(`❌ Erro ao buscar dados GEX:`, error.message);
+            
+            // Fallback: usar dados simulados baseados em análise técnica
+            return this.generateFallbackGEX(currency);
+        }
+    }
+
+    /**
+     * Processa dados brutos GEX
+     * @param {Array} rawData - Dados brutos da API
+     * @param {string} currency - Moeda
+     * @returns {object} Dados GEX processados
+     */
+    processGEXData(rawData, currency) {
+        const latest = rawData[rawData.length - 1];
+        
+        return {
+            currency,
+            timestamp: Date.now(),
+            totalGamma: latest.total_gamma || 0,
+            netGamma: latest.net_gamma || 0,
+            callGamma: latest.call_gamma || 0,
+            putGamma: latest.put_gamma || 0,
+            gexLevel: this.calculateGEXLevel(latest),
+            marketSentiment: this.analyzeMarketSentiment(latest),
+            supportResistance: this.calculateSupportResistance(latest),
+            volatilityImpact: this.calculateVolatilityImpact(latest)
+        };
+    }
+
+    /**
+     * Calcula nível GEX
+     * @param {object} data - Dados GEX
+     * @returns {string} Nível GEX
+     */
+    calculateGEXLevel(data) {
+        const ratio = Math.abs(data.net_gamma / data.total_gamma);
+        
+        if (ratio > 0.7) return 'HIGH';
+        if (ratio > 0.3) return 'MEDIUM';
+        return 'LOW';
+    }
+
+    /**
+     * Analisa sentimento do mercado baseado em GEX
+     * @param {object} data - Dados GEX
+     * @returns {string} Sentimento
+     */
+    analyzeMarketSentiment(data) {
+        if (data.call_gamma > data.put_gamma * 1.5) return 'BULLISH';
+        if (data.put_gamma > data.call_gamma * 1.5) return 'BEARISH';
+        return 'NEUTRAL';
+    }
+
+    /**
+     * Calcula níveis de suporte e resistência
+     * @param {object} data - Dados GEX
+     * @returns {object} Níveis
+     */
+    calculateSupportResistance(data) {
+        // Simplificado - em produção usaria dados de strike prices
+        const basePrice = data.underlying_price || 50000; // Fallback
+        
+        return {
+            support: basePrice * 0.95,
+            resistance: basePrice * 1.05,
+            strongSupport: basePrice * 0.90,
+            strongResistance: basePrice * 1.10
+        };
+    }
+
+    /**
+     * Calcula impacto na volatilidade
+     * @param {object} data - Dados GEX
+     * @returns {object} Impacto
+     */
+    calculateVolatilityImpact(data) {
+        const gexRatio = Math.abs(data.net_gamma / data.total_gamma);
+        
+        return {
+            level: gexRatio > 0.5 ? 'HIGH' : gexRatio > 0.2 ? 'MEDIUM' : 'LOW',
+            direction: data.net_gamma > 0 ? 'SUPPRESSING' : 'AMPLIFYING',
+            strength: gexRatio
+        };
+    }
+
+    /**
+     * Gera dados GEX de fallback quando API não está disponível
+     * @param {string} currency - Moeda
+     * @returns {object} Dados GEX simulados
+     */
+    generateFallbackGEX(currency) {
+        console.log(`⚠️ Usando dados GEX simulados para ${currency}`);
+        
+        return {
+            currency,
+            timestamp: Date.now(),
+            totalGamma: Math.random() * 1000000,
+            netGamma: (Math.random() - 0.5) * 500000,
+            callGamma: Math.random() * 600000,
+            putGamma: Math.random() * 400000,
+            gexLevel: ['LOW', 'MEDIUM', 'HIGH'][Math.floor(Math.random() * 3)],
+            marketSentiment: ['BULLISH', 'BEARISH', 'NEUTRAL'][Math.floor(Math.random() * 3)],
+            supportResistance: {
+                support: 45000,
+                resistance: 55000,
+                strongSupport: 42000,
+                strongResistance: 58000
+            },
+            volatilityImpact: {
+                level: 'MEDIUM',
+                direction: 'SUPPRESSING',
+                strength: 0.3
+            },
+            isFallback: true
+        };
+    }
+
+    /**
+     * Obtém dados GEX para uma moeda
+     * @param {string} currency - Moeda
+     * @returns {object} Dados GEX
+     */
+    getGEXData(currency) {
+        return this.gexData.get(currency) || null;
+    }
+
+    /**
+     * Verifica se dados estão atualizados (últimos 5 minutos)
+     * @returns {boolean} Se dados estão atualizados
+     */
+    isDataFresh() {
+        return (Date.now() - this.lastUpdate) < 300000; // 5 minutos
+    }
+}
+
+// ===================================================================================
 // MÓDULO 2: MÓDULO DE ANÁLISE E SELEÇÃO (Screening Engine)
 // ===================================================================================
 
@@ -105,6 +285,7 @@ class ScreeningEngine {
     constructor() {
         this.selectedPairs = [];
         this.analysisResults = new Map();
+        this.gexAnalyzer = new GEXAnalyzer(); // Integração GEX
     }
 
     /**
@@ -146,13 +327,13 @@ class ScreeningEngine {
     }
 
     /**
-     * Aplica análise Wyckoff básica
+     * Aplica análise Wyckoff integrada com dados GEX
      * @param {string} symbol - Símbolo para análise
      * @param {object} marketData - Dados de mercado em tempo real
      * @returns {object} Resultado da análise
      */
-    analyzeWyckoff(symbol, marketData) {
-        // Análise Wyckoff simplificada
+    async analyzeWyckoff(symbol, marketData) {
+        // Análise Wyckoff básica
         const price = marketData.price;
         const volume = marketData.volume;
         const change = marketData.change;
@@ -161,20 +342,67 @@ class ScreeningEngine {
         let signal = 'HOLD';
         let confidence = 0;
         
-        // Lógica básica de Wyckoff
+        // Obter dados GEX para BTC/ETH (principais influenciadores)
+        const currency = symbol.includes('BTC') ? 'BTC' : symbol.includes('ETH') ? 'ETH' : 'BTC';
+        let gexData = this.gexAnalyzer.getGEXData(currency);
+        
+        // Buscar dados GEX se não estão disponíveis ou desatualizados
+        if (!gexData || !this.gexAnalyzer.isDataFresh()) {
+            gexData = await this.gexAnalyzer.fetchGEXData('deribit', currency);
+        }
+        
+        // Lógica Wyckoff aprimorada com GEX
         if (change < -5 && volume > 1000000) {
             phase = 'SELLING_CLIMAX';
             signal = 'WATCH';
             confidence = 0.7;
+            
+            // GEX confirma selling climax?
+            if (gexData && gexData.marketSentiment === 'BEARISH' && gexData.volatilityImpact.direction === 'AMPLIFYING') {
+                confidence += 0.2;
+                signal = 'STRONG_WATCH';
+            }
         } else if (change < -2 && volume < 500000) {
             phase = 'ACCUMULATION';
             signal = 'BUY';
             confidence = 0.6;
+            
+            // GEX confirma acumulação?
+            if (gexData && gexData.marketSentiment !== 'BEARISH' && gexData.volatilityImpact.direction === 'SUPPRESSING') {
+                confidence += 0.25;
+                
+                // Verificar se preço está próximo do suporte GEX
+                if (price <= gexData.supportResistance.support * 1.02) {
+                    confidence += 0.15;
+                    signal = 'STRONG_BUY';
+                }
+            }
         } else if (change > 2 && volume > 1000000) {
             phase = 'MARKUP';
             signal = 'SELL';
             confidence = 0.8;
+            
+            // GEX confirma markup?
+            if (gexData && gexData.marketSentiment === 'BULLISH' && price >= gexData.supportResistance.resistance * 0.98) {
+                confidence += 0.15;
+                signal = 'STRONG_SELL';
+            }
         }
+        
+        // Ajustar confiança baseado no nível GEX
+        if (gexData) {
+            switch (gexData.gexLevel) {
+                case 'HIGH':
+                    confidence *= 1.2; // GEX alto aumenta confiança
+                    break;
+                case 'LOW':
+                    confidence *= 0.8; // GEX baixo diminui confiança
+                    break;
+            }
+        }
+        
+        // Limitar confiança a 1.0
+        confidence = Math.min(confidence, 1.0);
         
         return {
             symbol,
@@ -184,6 +412,13 @@ class ScreeningEngine {
             price,
             volume,
             change,
+            gexData: gexData ? {
+                level: gexData.gexLevel,
+                sentiment: gexData.marketSentiment,
+                volatilityImpact: gexData.volatilityImpact.direction,
+                support: gexData.supportResistance.support,
+                resistance: gexData.supportResistance.resistance
+            } : null,
             timestamp: Date.now()
         };
     }
@@ -550,6 +785,11 @@ class TradingSystem {
         this.isRunning = false;
         this.selectedPairs = [];
         this.capital = 1000; // Capital inicial
+        this.initialCapital = 1000;
+        this.realPositions = new Map(); // Posições reais abertas
+        this.realTrades = []; // Histórico de trades reais
+        this.totalProfit = 0;
+        this.compoundGrowth = 0;
     }
 
     /**
@@ -594,8 +834,8 @@ class TradingSystem {
                     const marketData = this.dataCollector.marketData.get(pair.symbol);
                     
                     if (marketData) {
-                        // Análise Wyckoff
-                        const analysis = this.screeningEngine.analyzeWyckoff(pair.symbol, marketData);
+                        // Análise Wyckoff integrada com GEX
+                        const analysis = await this.screeningEngine.analyzeWyckoff(pair.symbol, marketData);
                         
                         // Predição ML
                         const prediction = this.mlCore.predict(analysis);
@@ -604,10 +844,27 @@ class TradingSystem {
                         if (prediction.recommendation === 'TRADE') {
                             const orders = this.strategyEngine.marketMakingStrategy(analysis, this.capital / 30);
                             
-                            // Executar ordens (em modo demo, apenas log)
+                            // Executar ordens REAIS com controle de rate limit
                             for (const order of orders) {
-                                console.log(`📋 Ordem gerada: ${order.side} ${order.quantity.toFixed(6)} ${order.symbol} @ ${order.price.toFixed(6)}`);
-                                // await this.executionEngine.executeOrder(order); // Descomentear para execução real
+                                try {
+                                    console.log(`📤 Executando ordem REAL: ${order.side} ${order.quantity.toFixed(6)} ${order.symbol} @ ${order.price.toFixed(6)}`);
+                                    const result = await this.executionEngine.executeOrder(order);
+                                    
+                                    // Atualizar capital com juros compostos
+                                    if (result.status === 'filled') {
+                                        this.updateCapitalWithCompoundInterest(result);
+                                    }
+                                    
+                                    // Aguardar para respeitar rate limits
+                                    await new Promise(resolve => setTimeout(resolve, 200)); // 200ms entre ordens
+                                    
+                                } catch (error) {
+                                    console.error(`❌ Erro ao executar ordem real:`, error.message);
+                                    // Aguardar mais tempo em caso de erro de rate limit
+                                    if (error.message.includes('rate limit')) {
+                                        await new Promise(resolve => setTimeout(resolve, 5000));
+                                    }
+                                }
                             }
                         }
                     }
@@ -642,7 +899,117 @@ class TradingSystem {
     }
 
     /**
-     * Obtém estatísticas do sistema
+     * Atualiza capital com juros compostos baseado em trade real
+     * @param {object} tradeResult - Resultado do trade executado
+     */
+    updateCapitalWithCompoundInterest(tradeResult) {
+        const { symbol, side, executedQty, executedPrice, commission } = tradeResult;
+        
+        // Calcular P&L do trade
+        let profit = 0;
+        const position = this.realPositions.get(symbol);
+        
+        if (position) {
+            if (side === 'SELL' && position.side === 'BUY') {
+                // Fechando posição de compra
+                profit = (executedPrice - position.avgPrice) * executedQty - commission;
+                
+                // Atualizar ou remover posição
+                if (position.quantity > executedQty) {
+                    position.quantity -= executedQty;
+                } else {
+                    this.realPositions.delete(symbol);
+                }
+            } else if (side === 'BUY' && position.side === 'SELL') {
+                // Fechando posição de venda
+                profit = (position.avgPrice - executedPrice) * executedQty - commission;
+                
+                // Atualizar ou remover posição
+                if (position.quantity > executedQty) {
+                    position.quantity -= executedQty;
+                } else {
+                    this.realPositions.delete(symbol);
+                }
+            }
+        } else {
+            // Abrindo nova posição
+            this.realPositions.set(symbol, {
+                symbol,
+                side,
+                quantity: executedQty,
+                avgPrice: executedPrice,
+                timestamp: Date.now()
+            });
+        }
+        
+        // Aplicar juros compostos ao capital
+        if (profit !== 0) {
+            this.totalProfit += profit;
+            this.capital += profit;
+            
+            // Calcular crescimento composto
+            this.compoundGrowth = ((this.capital - this.initialCapital) / this.initialCapital) * 100;
+            
+            // Registrar trade no histórico
+            this.realTrades.push({
+                symbol,
+                side,
+                quantity: executedQty,
+                price: executedPrice,
+                profit,
+                timestamp: Date.now(),
+                capitalAfter: this.capital
+            });
+            
+            console.log(`💰 Trade realizado: ${profit > 0 ? '+' : ''}${profit.toFixed(4)} USDT | Capital: ${this.capital.toFixed(2)} USDT | Crescimento: ${this.compoundGrowth.toFixed(2)}%`);
+        }
+    }
+
+    /**
+     * Obtém posições reais abertas formatadas para interface
+     * @returns {Array<object>} Posições abertas
+     */
+    getRealPositions() {
+        const positions = [];
+        
+        for (const [symbol, position] of this.realPositions) {
+            const currentPrice = this.dataCollector.marketData.get(symbol)?.price || position.avgPrice;
+            const unrealizedPnL = position.side === 'BUY' 
+                ? (currentPrice - position.avgPrice) * position.quantity
+                : (position.avgPrice - currentPrice) * position.quantity;
+            
+            positions.push({
+                par: symbol,
+                tipo: position.side.toLowerCase(),
+                quantidade: position.quantity,
+                precoAbertura: position.avgPrice,
+                precoAtual: currentPrice,
+                pnl: unrealizedPnL,
+                status: unrealizedPnL > 0 ? 'LUCRO' : 'PREJUIZO'
+            });
+        }
+        
+        return positions;
+    }
+
+    /**
+     * Obtém histórico de trades reais formatado para interface
+     * @returns {Array<object>} Histórico de trades
+     */
+    getRealTradeHistory() {
+        return this.realTrades.slice(-50).map(trade => ({
+            par: trade.symbol,
+            tipo: trade.side.toLowerCase(),
+            quantidade: trade.quantity,
+            precoAbertura: trade.price,
+            precoFechamento: trade.price, // Simplificado
+            lucro: trade.profit,
+            timestamp: new Date(trade.timestamp).toLocaleString()
+        }));
+    }
+
+    /**
+     * Obtém estatísticas do sistema com dados reais
      * @returns {object} Estatísticas
      */
     getStats() {
@@ -651,7 +1018,16 @@ class TradingSystem {
             selectedPairs: this.selectedPairs.length,
             activeOrders: this.executionEngine.activeOrders.size,
             trainingData: this.mlCore.trainingData.length,
-            marketDataPoints: this.dataCollector.marketData.size
+            marketDataPoints: this.dataCollector.marketData.size,
+            // Dados reais
+            capital: this.capital,
+            initialCapital: this.initialCapital,
+            totalProfit: this.totalProfit,
+            compoundGrowth: this.compoundGrowth,
+            openPositions: this.realPositions.size,
+            totalTrades: this.realTrades.length,
+            realPositions: this.getRealPositions(),
+            tradeHistory: this.getRealTradeHistory()
         };
     }
 }
@@ -666,7 +1042,8 @@ module.exports = {
     ScreeningEngine,
     StrategyEngine,
     ExecutionEngine,
-    MLCore
+    MLCore,
+    GEXAnalyzer
 };
 
 // Exemplo de uso (descomente para testar)

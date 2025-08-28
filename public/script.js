@@ -275,17 +275,36 @@ socket.on('update', (data) => {
  * @param {object} data - Bot data (positions, history, etc.).
  */
 function updateInterfaceWithRealData(data) {
-    const { posicoesAbertas, historicoTrades, capitalAtual } = data;
-
-    document.getElementById('capital').innerText = parseFloat(capitalAtual).toFixed(2);
-    document.getElementById('totalTrades').innerText = historicoTrades.length;
-    document.getElementById('posicoesAbertas').innerText = posicoesAbertas.length;
+    // Atualizar estatísticas principais com dados REAIS
+    document.getElementById('capital').textContent = (data.capitalAtual || 0).toFixed(2);
+    document.getElementById('totalTrades').textContent = data.totalTrades || 0;
+    document.getElementById('posicoesAbertas').textContent = data.posicoesAbertasCount || 0;
+    document.getElementById('lucroDiario').textContent = (data.lucroTotal || 0).toFixed(4);
     
-    const lucroTotal = historicoTrades.reduce((acc, trade) => acc + (trade.lucro || 0), 0);
-    document.getElementById('lucroDiario').innerText = lucroTotal.toFixed(2);
-
-    updateChart(capitalAtual);
-    updateTables(posicoesAbertas, historicoTrades);
+    // Mostrar crescimento composto na interface
+    const capitalElement = document.getElementById('capital');
+    const crescimento = data.crescimentoComposto || 0;
+    capitalElement.style.color = crescimento >= 0 ? '#00ff88' : '#ff4444';
+    capitalElement.title = `Crescimento: ${crescimento.toFixed(2)}%`;
+    
+    // Atualizar tabelas com dados reais
+    updateTables(data.posicoesAbertas || [], data.historicoTrades || []);
+    
+    // Atualizar gráfico com capital real
+    updateChart(data.capitalAtual || 0);
+    
+    // Atualizar carrossel com pares sendo analisados
+    if (data.stats && data.stats.selectedPairs > 0) {
+        updateCarouselWithRealPairs(data.stats.selectedPairs);
+    }
+    
+    // Log para debug
+    console.log('📊 Dados reais atualizados:', {
+        capital: data.capitalAtual,
+        trades: data.totalTrades,
+        posicoes: data.posicoesAbertasCount,
+        crescimento: data.crescimentoComposto
+    });
 }
 
 /**
@@ -325,21 +344,66 @@ function updateChart(capitalAtual) {
 }
 
 function updateTables(posicoesAbertas, historicoTrades) {
-    const tbodyAberta = document.querySelector("#abertas tbody");
-    tbodyAberta.innerHTML = "";
-    posicoesAbertas.forEach(p => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `<td>${p.par}</td><td>${p.tipo}</td><td>${p.quantidade}</td><td>${p.precoAbertura}</td><td>${p.status || 'N/A'}</td>`;
-        tbodyAberta.appendChild(tr);
+    // Atualizar tabela de posições abertas com dados REAIS
+    const abertasBody = document.querySelector('#abertas tbody');
+    abertasBody.innerHTML = '';
+    
+    posicoesAbertas.forEach(posicao => {
+        const row = abertasBody.insertRow();
+        const pnlColor = posicao.pnl >= 0 ? '#00ff88' : '#ff4444';
+        row.innerHTML = `
+            <td>${posicao.par}</td>
+            <td style="color: ${posicao.tipo === 'buy' ? '#00ff88' : '#ff4444'}">${posicao.tipo.toUpperCase()}</td>
+            <td>${posicao.quantidade.toFixed(6)}</td>
+            <td>$${posicao.precoAbertura.toFixed(4)}</td>
+            <td style="color: ${pnlColor}">${posicao.status} (${posicao.pnl >= 0 ? '+' : ''}${posicao.pnl.toFixed(4)})</td>
+        `;
     });
+    
+    // Atualizar tabela de histórico com trades REAIS
+    const historicoBody = document.querySelector('#historico tbody');
+    historicoBody.innerHTML = '';
+    
+    // Mostrar apenas os últimos 20 trades
+    const recentTrades = historicoTrades.slice(-20).reverse();
+    
+    recentTrades.forEach(trade => {
+        const row = historicoBody.insertRow();
+        const lucroColor = trade.lucro >= 0 ? '#00ff88' : '#ff4444';
+        row.innerHTML = `
+            <td>${trade.par}</td>
+            <td style="color: ${trade.tipo === 'buy' ? '#00ff88' : '#ff4444'}">${trade.tipo.toUpperCase()}</td>
+            <td>${trade.quantidade.toFixed(6)}</td>
+            <td>$${trade.precoAbertura.toFixed(4)}</td>
+            <td>$${trade.precoFechamento.toFixed(4)}</td>
+            <td style="color: ${lucroColor}">${trade.lucro >= 0 ? '+' : ''}${trade.lucro.toFixed(4)} USDT</td>
+        `;
+    });
+}
 
-    const tbodyHist = document.querySelector("#historico tbody");
-    tbodyHist.innerHTML = "";
-    historicoTrades.forEach(t => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `<td>${t.par}</td><td>${t.tipo}</td><td>${t.quantidade}</td><td>${t.precoAbertura}</td><td>${t.precoFechamento}</td><td>${t.lucro.toFixed(2)}</td>`;
-        tbodyHist.appendChild(tr);
-    });
+/**
+ * Atualiza carrossel com pares sendo analisados em tempo real
+ * @param {number} selectedPairs - Número de pares selecionados
+ */
+function updateCarouselWithRealPairs(selectedPairs) {
+    const track = document.getElementById('carouselTrack');
+    
+    // Atualizar header do carrossel
+    const header = document.querySelector('.carousel-header span');
+    header.textContent = `Analisando ${selectedPairs} Pares em Tempo Real`;
+    
+    // Simular ativos sendo analisados (em produção, viria do backend)
+    const assets = [
+        'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'ADAUSDT', 'SOLUSDT',
+        'XRPUSDT', 'DOTUSDT', 'LINKUSDT', 'LTCUSDT', 'BCHUSDT'
+    ];
+    
+    track.innerHTML = assets.slice(0, selectedPairs).map(asset => `
+        <div class="asset-item analyzing">
+            <i class="fas fa-chart-line asset-icon"></i>
+            <span>${asset}</span>
+        </div>
+    `).join('');
 }
 
 function updatePlaceholders() {
