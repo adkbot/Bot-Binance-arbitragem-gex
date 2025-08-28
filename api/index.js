@@ -342,6 +342,118 @@ app.get('/api/test-connectivity', async (req, res) => {
          tests: tests
      });
  });
+ 
+ // Rota para salvar credenciais PERMANENTEMENTE
+ app.post('/api/save-credentials', async (req, res) => {
+     console.log('=== SALVANDO CREDENCIAIS PERMANENTEMENTE ===');
+     
+     try {
+         const { apiKey, apiSecret, capitalInicial, riskLevel } = req.body;
+         
+         if (!apiKey || !apiSecret) {
+             return res.status(400).json({ error: 'API Key e Secret são obrigatórios' });
+         }
+         
+         console.log('Dados recebidos para salvar:', {
+             hasApiKey: !!apiKey,
+             hasApiSecret: !!apiSecret,
+             capital: capitalInicial,
+             risk: riskLevel
+         });
+         
+         // Validar credenciais primeiro
+         const ccxt = require('ccxt');
+         const testExchange = new ccxt.binance({
+             apiKey: apiKey,
+             secret: apiSecret,
+             sandbox: false,
+             enableRateLimit: true,
+             timeout: 10000
+         });
+         
+         console.log('🔍 Validando credenciais antes de salvar...');
+         await testExchange.fetchBalance();
+         console.log('✅ Credenciais válidas!');
+         
+         // Salvar em variáveis globais (persistente durante execução)
+         global.SAVED_CREDENTIALS = {
+             apiKey: apiKey,
+             apiSecret: apiSecret,
+             capitalInicial: capitalInicial || 500,
+             riskLevel: riskLevel || 'medio',
+             savedAt: new Date().toISOString(),
+             validated: true
+         };
+         
+         console.log('💾 Credenciais salvas globalmente');
+         
+         res.json({
+             success: true,
+             message: 'Credenciais salvas e validadas com sucesso!',
+             config: {
+                 capitalInicial: capitalInicial || 500,
+                 riskLevel: riskLevel || 'medio',
+                 hasCredentials: true,
+                 savedAt: global.SAVED_CREDENTIALS.savedAt
+             }
+         });
+         
+     } catch (error) {
+         console.error('❌ Erro ao salvar credenciais:', error);
+         
+         let errorMessage = 'Erro ao salvar credenciais';
+         if (error.message.includes('Invalid API-key')) {
+             errorMessage = 'Chave da API inválida';
+         } else if (error.message.includes('Invalid signature')) {
+             errorMessage = 'Secret da API inválido';
+         } else if (error.message.includes('IP not allowed')) {
+             errorMessage = 'IP não autorizado na Binance';
+         }
+         
+         res.status(400).json({ error: errorMessage });
+     }
+ });
+ 
+ // Rota para carregar credenciais salvas
+ app.get('/api/get-credentials', (req, res) => {
+     console.log('=== CARREGANDO CREDENCIAIS SALVAS ===');
+     
+     if (global.SAVED_CREDENTIALS && global.SAVED_CREDENTIALS.validated) {
+         console.log('✅ Credenciais encontradas e válidas');
+         
+         res.json({
+             success: true,
+             configured: true,
+             config: {
+                 apiKey: global.SAVED_CREDENTIALS.apiKey,
+                 apiSecret: global.SAVED_CREDENTIALS.apiSecret,
+                 capitalInicial: global.SAVED_CREDENTIALS.capitalInicial,
+                 riskLevel: global.SAVED_CREDENTIALS.riskLevel,
+                 savedAt: global.SAVED_CREDENTIALS.savedAt
+             }
+         });
+     } else {
+         console.log('ℹ️ Nenhuma credencial salva encontrada');
+         
+         res.json({
+             success: true,
+             configured: false,
+             message: 'Nenhuma credencial configurada'
+         });
+     }
+ });
+ 
+ // Rota para limpar credenciais salvas
+ app.delete('/api/clear-credentials', (req, res) => {
+     console.log('=== LIMPANDO CREDENCIAIS SALVAS ===');
+     
+     global.SAVED_CREDENTIALS = null;
+     
+     res.json({
+         success: true,
+         message: 'Credenciais removidas com sucesso'
+     });
+ });
 
 // Rota para criar sessão HTTP
 app.post('/api/create-session', (req, res) => {
