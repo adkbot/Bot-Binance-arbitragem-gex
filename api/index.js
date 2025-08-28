@@ -361,19 +361,105 @@ app.get('/api/test-connectivity', async (req, res) => {
              risk: riskLevel
          });
          
-         // Validar credenciais primeiro
+         // Validar credenciais com múltiplos endpoints
          const ccxt = require('ccxt');
-         const testExchange = new ccxt.binance({
-             apiKey: apiKey,
-             secret: apiSecret,
-             sandbox: false,
-             enableRateLimit: true,
-             timeout: 10000
-         });
          
-         console.log('🔍 Validando credenciais antes de salvar...');
-         await testExchange.fetchBalance();
-         console.log('✅ Credenciais válidas!');
+         console.log('🔍 Validando credenciais com múltiplos endpoints...');
+         
+         // Lista de configurações para tentar
+         const binanceConfigs = [
+             {
+                 name: 'Binance Global',
+                 config: {
+                     apiKey: apiKey,
+                     secret: apiSecret,
+                     sandbox: false,
+                     enableRateLimit: true,
+                     timeout: 15000,
+                     urls: {
+                         api: {
+                             public: 'https://api.binance.com',
+                             private: 'https://api.binance.com'
+                         }
+                     }
+                 }
+             },
+             {
+                 name: 'Binance Alternative',
+                 config: {
+                     apiKey: apiKey,
+                     secret: apiSecret,
+                     sandbox: false,
+                     enableRateLimit: true,
+                     timeout: 15000,
+                     urls: {
+                         api: {
+                             public: 'https://api1.binance.com',
+                             private: 'https://api1.binance.com'
+                         }
+                     }
+                 }
+             },
+             {
+                 name: 'Binance API2',
+                 config: {
+                     apiKey: apiKey,
+                     secret: apiSecret,
+                     sandbox: false,
+                     enableRateLimit: true,
+                     timeout: 15000,
+                     urls: {
+                         api: {
+                             public: 'https://api2.binance.com',
+                             private: 'https://api2.binance.com'
+                         }
+                     }
+                 }
+             }
+         ];
+         
+         let validationSuccess = false;
+         let lastError = null;
+         
+         for (const binanceConfig of binanceConfigs) {
+             try {
+                 console.log(`🌐 Tentando ${binanceConfig.name}...`);
+                 
+                 const testExchange = new ccxt.binance(binanceConfig.config);
+                 
+                 // Tentar uma operação simples primeiro
+                 await testExchange.fetchTime();
+                 console.log(`✅ ${binanceConfig.name} - Conectividade OK`);
+                 
+                 // Tentar buscar saldo
+                 await testExchange.fetchBalance();
+                 console.log(`✅ ${binanceConfig.name} - Credenciais válidas!`);
+                 
+                 validationSuccess = true;
+                 break;
+                 
+             } catch (error) {
+                 console.log(`❌ ${binanceConfig.name} falhou:`, error.message);
+                 lastError = error;
+                 
+                 // Se for erro de região, tentar próximo endpoint
+                 if (error.message.includes('451') || error.message.includes('restricted location')) {
+                     console.log(`🌍 ${binanceConfig.name} bloqueado por região, tentando próximo...`);
+                     continue;
+                 }
+                 
+                 // Se for erro de credenciais, não tentar outros endpoints
+                 if (error.message.includes('Invalid API-key') || error.message.includes('Invalid signature')) {
+                     console.log(`🔑 Erro de credenciais detectado, parando tentativas`);
+                     throw error;
+                 }
+             }
+         }
+         
+         if (!validationSuccess) {
+             console.log('❌ Todos os endpoints falharam');
+             throw lastError || new Error('Não foi possível conectar com nenhum endpoint da Binance');
+         }
          
          // Salvar em variáveis globais (persistente durante execução)
          global.SAVED_CREDENTIALS = {
@@ -430,12 +516,18 @@ app.get('/api/test-connectivity', async (req, res) => {
               errorMessage = '🚫 Permissões insuficientes na API';
               errorDetails = 'Habilite as permissões "Spot Trading" na sua API da Binance';
           } else if (error.message.includes('banned') || error.message.includes('restricted')) {
-              errorMessage = '🚫 Conta ou IP restrito';
-              errorDetails = 'Sua conta ou IP pode estar temporariamente restrito na Binance';
-          } else {
-              errorMessage = '❌ Erro na validação das credenciais';
-              errorDetails = `Erro específico: ${error.message}`;
-          }
+               errorMessage = '🚫 Conta ou IP restrito';
+               errorDetails = 'Sua conta ou IP pode estar temporariamente restrito na Binance';
+           } else if (error.message.includes('451') || error.message.includes('Unavailable For Legal Reasons') || error.message.includes('restricted location')) {
+               errorMessage = '🌍 Região bloqueada pela Binance';
+               errorDetails = 'Serviço indisponível na sua região. Tentamos múltiplos endpoints mas todos estão bloqueados geograficamente.';
+           } else if (error.message.includes('Não foi possível conectar com nenhum endpoint')) {
+               errorMessage = '🌐 Todos os endpoints da Binance falharam';
+               errorDetails = 'Tentamos conectar com múltiplos servidores da Binance mas todos falharam. Pode ser um problema temporário de conectividade.';
+           } else {
+               errorMessage = '❌ Erro na validação das credenciais';
+               errorDetails = `Erro específico: ${error.message}`;
+           }
           
           console.log('🔍 Erro categorizado como:', errorMessage);
           console.log('📝 Detalhes para o usuário:', errorDetails);
