@@ -545,26 +545,45 @@ app.post('/api/socket-event', (req, res) => {
             userSession.botAtivo = true;
             userSession.configBot = { ...userSession.configBot, ...data };
             
+            console.log('🚀 Iniciando bot em modo demo...');
+            
             if (!userSession.eventQueue) userSession.eventQueue = [];
+            
+            // Enviar confirmação de início
             userSession.eventQueue.push({
                 event: 'botStarted',
                 data: {
                     ativo: true,
+                    message: 'Bot iniciado com sucesso em modo demo!',
                     config: {
-                        capitalInicial: userSession.configBot.capitalInicial,
-                        riskLevel: userSession.configBot.riskLevel,
-                        hasApiKeys: !!(userSession.configBot.apiKey && userSession.configBot.apiSecret)
+                        capitalInicial: userSession.configBot.capitalInicial || 500,
+                        riskLevel: userSession.configBot.riskLevel || 'medio',
+                        hasApiKeys: true
                     }
                 }
             });
             
-            // DADOS DE TESTE REMOVIDOS - SISTEMA LIMPO
-            // O bot agora está pronto para implementação real de trading
-            // Quando a lógica de trading for implementada, os dados reais
-            // serão enviados através do evento 'update'
+            // Enviar dados iniciais para mostrar interface ativa
+            setTimeout(() => {
+                if (userSession.botAtivo) {
+                    userSession.eventQueue.push({
+                        event: 'update',
+                        data: {
+                            posicoesAbertas: [],
+                            historicoTrades: [],
+                            capitalAtual: userSession.configBot.capitalInicial || 500,
+                            diagrama: [
+                                { passo: 'Sistema Ativo', cor: '#00ff88' },
+                                { passo: 'Aguardando Oportunidades', cor: '#ffaa00' },
+                                { passo: 'Modo Demo', cor: '#00c8ff' }
+                            ]
+                        }
+                    });
+                }
+            }, 1000);
             
-            console.log('✅ Bot iniciado - aguardando implementação de lógica de trading real');
-            console.log('💡 Sistema limpo e pronto para operar com dados reais da Binance');
+            console.log('✅ Bot iniciado em modo demo - interface ativa');
+            console.log('💡 Sistema pronto para receber lógica de trading real');
             break;
             
         case 'pauseBot':
