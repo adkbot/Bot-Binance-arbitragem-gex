@@ -35,26 +35,55 @@ app.use(express.static(path.join(__dirname, '../public')));
 // Rota para validar saldo na Binance
 app.post('/api/validate-balance', async (req, res) => {
     try {
+        console.log('=== INICIANDO VALIDAÇÃO DA API BINANCE ===');
         const { apiKey, apiSecret } = req.body;
         
+        console.log('Dados recebidos:', {
+            hasApiKey: !!apiKey,
+            hasApiSecret: !!apiSecret,
+            apiKeyLength: apiKey ? apiKey.length : 0,
+            apiSecretLength: apiSecret ? apiSecret.length : 0
+        });
+        
         if (!apiKey || !apiSecret) {
+            console.log('❌ Erro: Chaves não fornecidas');
             return res.status(400).json({ error: 'API Key e Secret são obrigatórios' });
         }
+        
+        console.log('✅ Chaves fornecidas, criando instância da Binance...');
         
         // Configurar exchange temporariamente para validação
         const tempExchange = new ccxt.binance({
             apiKey: apiKey,
             secret: apiSecret,
             sandbox: false,
-            enableRateLimit: true
+            enableRateLimit: true,
+            timeout: 30000, // 30 segundos de timeout
+            options: {
+                defaultType: 'spot'
+            }
         });
         
+        console.log('🔍 Instância criada, testando conexão...');
+        
+        // Primeiro, testar se a API está funcionando com uma chamada simples
+        console.log('📡 Testando conectividade básica...');
+        const serverTime = await tempExchange.fetchTime();
+        console.log('✅ Servidor Binance respondeu, timestamp:', new Date(serverTime));
+        
+        console.log('💰 Buscando saldo da conta...');
         // Buscar saldo da conta
         const balance = await tempExchange.fetchBalance();
+        console.log('✅ Saldo obtido com sucesso');
         
         // Verificar se tem USDT
         const usdtBalance = balance.USDT ? balance.USDT.free : 0;
         const totalUSDT = balance.USDT ? balance.USDT.total : 0;
+        
+        console.log('💵 Saldos encontrados:', {
+            usdtFree: usdtBalance,
+            usdtTotal: totalUSDT
+        });
         
         res.json({
             success: true,
@@ -64,16 +93,30 @@ app.post('/api/validate-balance', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('Erro ao validar saldo:', error.message);
+        console.error('❌ ERRO DETALHADO NA VALIDAÇÃO:');
+        console.error('Tipo do erro:', error.constructor.name);
+        console.error('Mensagem:', error.message);
+        console.error('Stack:', error.stack);
         
         let errorMessage = 'Erro ao conectar com a API da Binance';
         
         if (error.message.includes('Invalid API-key')) {
             errorMessage = 'Chave da API inválida';
+            console.log('🔑 Problema identificado: API Key inválida');
         } else if (error.message.includes('Invalid signature')) {
             errorMessage = 'Secret da API inválido';
+            console.log('🔐 Problema identificado: Secret inválido');
         } else if (error.message.includes('IP not allowed')) {
             errorMessage = 'IP não autorizado na Binance';
+            console.log('🌐 Problema identificado: IP não autorizado');
+        } else if (error.message.includes('timeout')) {
+            errorMessage = 'Timeout na conexão com a Binance';
+            console.log('⏰ Problema identificado: Timeout de conexão');
+        } else if (error.message.includes('ENOTFOUND') || error.message.includes('ECONNREFUSED')) {
+            errorMessage = 'Problema de conectividade de rede';
+            console.log('🌐 Problema identificado: Conectividade de rede');
+        } else {
+            console.log('❓ Erro não categorizado:', error.message);
         }
         
         res.status(400).json({ error: errorMessage });
