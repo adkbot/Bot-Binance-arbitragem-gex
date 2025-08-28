@@ -563,24 +563,107 @@ app.post('/api/socket-event', (req, res) => {
                 }
             });
             
-            // Enviar dados iniciais para mostrar interface ativa
-            setTimeout(() => {
+            // Inicializar Sistema de Trading Inteligente
+            setTimeout(async () => {
                 if (userSession.botAtivo) {
-                    userSession.eventQueue.push({
-                        event: 'update',
-                        data: {
-                            posicoesAbertas: [],
-                            historicoTrades: [],
-                            capitalAtual: userSession.configBot.capitalInicial || 500,
-                            diagrama: [
-                                { passo: 'Sistema Ativo', cor: '#00ff88' },
-                                { passo: 'Aguardando Oportunidades', cor: '#ffaa00' },
-                                { passo: 'Modo Demo', cor: '#00c8ff' }
-                            ]
+                    try {
+                        // Importar sistema de trading
+                        const { TradingSystem } = require('../trading-engine');
+                        
+                        // Inicializar com credenciais salvas
+                        const credentials = global.SAVED_CREDENTIALS;
+                        if (credentials && credentials.apiKey && credentials.apiSecret) {
+                            console.log('🚀 Iniciando Sistema de Trading Inteligente...');
+                            
+                            userSession.tradingSystem = new TradingSystem(
+                                credentials.apiKey,
+                                credentials.apiSecret
+                            );
+                            
+                            // Configurar capital
+                            userSession.tradingSystem.capital = credentials.capitalInicial || 500;
+                            
+                            // Iniciar sistema (modo demo por enquanto)
+                            await userSession.tradingSystem.start();
+                            
+                            // Enviar dados iniciais
+                            userSession.eventQueue.push({
+                                event: 'update',
+                                data: {
+                                    posicoesAbertas: [],
+                                    historicoTrades: [],
+                                    capitalAtual: userSession.tradingSystem.capital,
+                                    diagrama: [
+                                        { passo: 'Sistema de IA Ativo', cor: '#00ff88' },
+                                        { passo: 'Analisando 30 Melhores Pares', cor: '#ffaa00' },
+                                        { passo: 'Wyckoff + ML Core', cor: '#00c8ff' }
+                                    ]
+                                }
+                            });
+                            
+                            // Iniciar monitoramento em tempo real
+                            userSession.tradingInterval = setInterval(() => {
+                                if (userSession.botAtivo && userSession.tradingSystem) {
+                                    const stats = userSession.tradingSystem.getStats();
+                                    
+                                    userSession.eventQueue.push({
+                                        event: 'update',
+                                        data: {
+                                            posicoesAbertas: [],
+                                            historicoTrades: [],
+                                            capitalAtual: userSession.tradingSystem.capital,
+                                            stats: {
+                                                selectedPairs: stats.selectedPairs,
+                                                activeOrders: stats.activeOrders,
+                                                trainingData: stats.trainingData,
+                                                marketDataPoints: stats.marketDataPoints
+                                            },
+                                            diagrama: [
+                                                { passo: `${stats.selectedPairs} Pares Ativos`, cor: '#00ff88' },
+                                                { passo: `${stats.marketDataPoints} Dados em Tempo Real`, cor: '#ffaa00' },
+                                                { passo: `${stats.trainingData} Amostras ML`, cor: '#00c8ff' }
+                                            ]
+                                        }
+                                    });
+                                }
+                            }, 30000); // Atualizar a cada 30 segundos
+                            
+                        } else {
+                            // Modo demo sem credenciais
+                            userSession.eventQueue.push({
+                                event: 'update',
+                                data: {
+                                    posicoesAbertas: [],
+                                    historicoTrades: [],
+                                    capitalAtual: userSession.configBot.capitalInicial || 500,
+                                    diagrama: [
+                                        { passo: 'Modo Demo Ativo', cor: '#00ff88' },
+                                        { passo: 'Configure API Keys', cor: '#ffaa00' },
+                                        { passo: 'Para Trading Real', cor: '#00c8ff' }
+                                    ]
+                                }
+                            });
                         }
-                    });
+                        
+                    } catch (error) {
+                        console.error('❌ Erro ao iniciar sistema de trading:', error.message);
+                        
+                        userSession.eventQueue.push({
+                            event: 'update',
+                            data: {
+                                posicoesAbertas: [],
+                                historicoTrades: [],
+                                capitalAtual: userSession.configBot.capitalInicial || 500,
+                                diagrama: [
+                                    { passo: 'Erro no Sistema', cor: '#ff4444' },
+                                    { passo: 'Modo Seguro Ativo', cor: '#ffaa00' },
+                                    { passo: 'Verifique Credenciais', cor: '#00c8ff' }
+                                ]
+                            }
+                        });
+                    }
                 }
-            }, 1000);
+            }, 2000);
             
             console.log('✅ Bot iniciado em modo demo - interface ativa');
             console.log('💡 Sistema pronto para receber lógica de trading real');
@@ -589,11 +672,29 @@ app.post('/api/socket-event', (req, res) => {
         case 'pauseBot':
             userSession.botAtivo = false;
             
+            // Parar sistema de trading se estiver ativo
+            if (userSession.tradingSystem) {
+                console.log('🛑 Parando Sistema de Trading Inteligente...');
+                userSession.tradingSystem.stop();
+                userSession.tradingSystem = null;
+            }
+            
+            // Limpar interval de monitoramento
+            if (userSession.tradingInterval) {
+                clearInterval(userSession.tradingInterval);
+                userSession.tradingInterval = null;
+            }
+            
             if (!userSession.eventQueue) userSession.eventQueue = [];
             userSession.eventQueue.push({
                 event: 'botPaused',
-                data: { ativo: false }
+                data: { 
+                    ativo: false,
+                    message: 'Sistema de Trading parado com sucesso'
+                }
             });
+            
+            console.log('✅ Bot pausado - sistema de trading parado');
             break;
     }
     
