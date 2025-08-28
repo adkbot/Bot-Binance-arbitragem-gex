@@ -128,6 +128,221 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
+// Rota de teste básico do sistema
+app.get('/api/test-system', (req, res) => {
+    console.log('=== TESTE BÁSICO DO SISTEMA ===');
+    
+    const systemInfo = {
+        timestamp: new Date().toISOString(),
+        nodeVersion: process.version,
+        platform: process.platform,
+        uptime: process.uptime(),
+        memoryUsage: process.memoryUsage(),
+        environment: process.env.NODE_ENV || 'development',
+        vercelRegion: process.env.VERCEL_REGION || 'local',
+        ccxtAvailable: !!require('ccxt'),
+        expressWorking: true
+    };
+    
+    console.log('✅ Sistema HTTP funcionando');
+    console.log('📊 Informações do sistema:', systemInfo);
+    
+    res.json({
+        success: true,
+        message: 'Sistema HTTP funcionando corretamente',
+        systemInfo: systemInfo
+    });
+});
+
+// Rota de teste de conectividade externa
+app.get('/api/test-connectivity', async (req, res) => {
+    console.log('=== TESTE DE CONECTIVIDADE EXTERNA ===');
+    
+    const tests = [];
+    
+    try {
+        // Teste 1: Verificar se consegue fazer requisição HTTP básica
+        console.log('🌐 Testando conectividade HTTP básica...');
+        const https = require('https');
+        
+        const testHttps = new Promise((resolve, reject) => {
+            const req = https.get('https://httpbin.org/get', (res) => {
+                resolve({ success: true, status: res.statusCode });
+            });
+            req.on('error', (error) => {
+                reject({ success: false, error: error.message });
+            });
+            req.setTimeout(10000, () => {
+                req.destroy();
+                reject({ success: false, error: 'Timeout' });
+            });
+        });
+        
+        const httpsResult = await testHttps;
+        tests.push({ test: 'HTTPS Connectivity', ...httpsResult });
+        console.log('✅ Conectividade HTTPS OK');
+        
+    } catch (error) {
+        tests.push({ test: 'HTTPS Connectivity', success: false, error: error.message });
+        console.log('❌ Erro na conectividade HTTPS:', error.message);
+    }
+    
+    try {
+        // Teste 2: Verificar se consegue resolver DNS da Binance
+        console.log('🔍 Testando resolução DNS da Binance...');
+        const dns = require('dns');
+        
+        const dnsTest = new Promise((resolve, reject) => {
+            dns.lookup('api.binance.com', (err, address) => {
+                if (err) {
+                    reject({ success: false, error: err.message });
+                } else {
+                    resolve({ success: true, address: address });
+                }
+            });
+        });
+        
+        const dnsResult = await dnsTest;
+        tests.push({ test: 'Binance DNS Resolution', ...dnsResult });
+        console.log('✅ DNS da Binance resolvido:', dnsResult.address);
+        
+    } catch (error) {
+        tests.push({ test: 'Binance DNS Resolution', success: false, error: error.message });
+        console.log('❌ Erro na resolução DNS:', error.message);
+    }
+    
+    res.json({
+         success: true,
+         message: 'Testes de conectividade concluídos',
+         tests: tests
+     });
+ });
+ 
+ // Rota de teste específico do CCXT e Binance
+ app.get('/api/test-ccxt', async (req, res) => {
+     console.log('=== TESTE ESPECÍFICO DO CCXT E BINANCE ===');
+     
+     const tests = [];
+     
+     try {
+         // Teste 1: Verificar se CCXT está funcionando
+         console.log('📦 Testando CCXT...');
+         const ccxt = require('ccxt');
+         
+         tests.push({
+             test: 'CCXT Import',
+             success: true,
+             version: ccxt.version || 'unknown'
+         });
+         console.log('✅ CCXT importado com sucesso');
+         
+         // Teste 2: Verificar se consegue criar instância da Binance
+         console.log('🏦 Testando criação de instância Binance...');
+         const binanceInstance = new ccxt.binance({
+             sandbox: false,
+             enableRateLimit: true,
+             timeout: 10000
+         });
+         
+         tests.push({
+             test: 'Binance Instance Creation',
+             success: true,
+             hasInstance: !!binanceInstance
+         });
+         console.log('✅ Instância Binance criada');
+         
+         // Teste 3: Testar fetchTime (não precisa de API keys)
+         console.log('⏰ Testando fetchTime da Binance...');
+         const serverTime = await binanceInstance.fetchTime();
+         
+         tests.push({
+             test: 'Binance fetchTime',
+             success: true,
+             serverTime: new Date(serverTime).toISOString()
+         });
+         console.log('✅ fetchTime funcionou:', new Date(serverTime));
+         
+         // Teste 4: Testar fetchMarkets (não precisa de API keys)
+         console.log('📊 Testando fetchMarkets da Binance...');
+         const markets = await binanceInstance.fetchMarkets();
+         
+         tests.push({
+             test: 'Binance fetchMarkets',
+             success: true,
+             marketsCount: markets.length
+         });
+         console.log('✅ fetchMarkets funcionou, mercados:', markets.length);
+         
+     } catch (error) {
+         console.error('❌ Erro no teste CCXT:', error);
+         tests.push({
+             test: 'CCXT Error',
+             success: false,
+             error: error.message,
+             stack: error.stack
+         });
+     }
+     
+     res.json({
+         success: true,
+         message: 'Testes CCXT concluídos',
+         tests: tests
+     });
+ });
+ 
+ // Rota de teste com chaves de API simuladas
+ app.post('/api/test-api-simulation', async (req, res) => {
+     console.log('=== TESTE DE SIMULAÇÃO DE API ===');
+     
+     const tests = [];
+     
+     try {
+         // Teste com chaves inválidas para ver o comportamento
+         console.log('🔑 Testando com chaves inválidas...');
+         const ccxt = require('ccxt');
+         
+         const testExchange = new ccxt.binance({
+             apiKey: 'test_invalid_key_12345',
+             secret: 'test_invalid_secret_67890',
+             sandbox: false,
+             enableRateLimit: true,
+             timeout: 10000
+         });
+         
+         // Tentar fetchBalance com chaves inválidas
+         try {
+             await testExchange.fetchBalance();
+             tests.push({
+                 test: 'Invalid Keys Test',
+                 success: false,
+                 error: 'Deveria ter falhado com chaves inválidas'
+             });
+         } catch (error) {
+             tests.push({
+                 test: 'Invalid Keys Test',
+                 success: true,
+                 expectedError: error.message,
+                 errorType: error.constructor.name
+             });
+             console.log('✅ Erro esperado com chaves inválidas:', error.message);
+         }
+         
+     } catch (error) {
+         console.error('❌ Erro no teste de simulação:', error);
+         tests.push({
+             test: 'Simulation Error',
+             success: false,
+             error: error.message
+         });
+     }
+     
+     res.json({
+         success: true,
+         message: 'Testes de simulação concluídos',
+         tests: tests
+     });
+ });
+
 // Rota para criar sessão HTTP
 app.post('/api/create-session', (req, res) => {
     const sessionId = generateSessionId();
