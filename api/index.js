@@ -558,30 +558,13 @@ app.post('/api/socket-event', (req, res) => {
                 }
             });
             
-            // Simular dados de teste após 2 segundos
-            setTimeout(() => {
-                const dadosTeste = {
-                    posicoesAbertas: [
-                        { par: 'BTC/USDT', tipo: 'buy', quantidade: 0.001, precoAbertura: 45000, delta: 0.85 },
-                        { par: 'ETH/USDT', tipo: 'sell', quantidade: 0.05, precoAbertura: 2800, delta: 0.72 }
-                    ],
-                    historicoTrades: [
-                        { par: 'BNB/USDT', tipo: 'buy', quantidade: 0.1, precoAbertura: 320, precoFechamento: 335, lucro: 1.5 },
-                        { par: 'ADA/USDT', tipo: 'sell', quantidade: 100, precoAbertura: 0.45, precoFechamento: 0.42, lucro: 3.0 }
-                    ],
-                    capitalAtual: userSession.configBot.capitalInicial + 4.5,
-                    diagrama: [
-                        { passo: 'Análise Wyckoff', cor: '#00ff88' },
-                        { passo: 'Delta/GEX', cor: '#ffaa00' },
-                        { passo: 'Execução', cor: '#00c8ff' }
-                    ]
-                };
-                
-                userSession.eventQueue.push({
-                    event: 'update',
-                    data: dadosTeste
-                });
-            }, 2000);
+            // DADOS DE TESTE REMOVIDOS - SISTEMA LIMPO
+            // O bot agora está pronto para implementação real de trading
+            // Quando a lógica de trading for implementada, os dados reais
+            // serão enviados através do evento 'update'
+            
+            console.log('✅ Bot iniciado - aguardando implementação de lógica de trading real');
+            console.log('💡 Sistema limpo e pronto para operar com dados reais da Binance');
             break;
             
         case 'pauseBot':
