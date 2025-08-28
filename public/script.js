@@ -235,22 +235,43 @@ function closeSettings() {
 function saveSettings(event) {
     event.preventDefault();
     
+    console.log('=== SALVANDO CONFIGURAÇÕES ===');
+    
     const apiKey = document.getElementById('apiKey').value.trim();
     const apiSecret = document.getElementById('apiSecret').value.trim();
     const capitalInicial = parseFloat(document.getElementById('capitalInicial').value);
     const riskLevel = document.getElementById('riskLevel').value;
     
+    console.log('Dados do formulário:', {
+        hasApiKey: !!apiKey,
+        hasApiSecret: !!apiSecret,
+        apiKeyLength: apiKey ? apiKey.length : 0,
+        capital: capitalInicial,
+        risk: riskLevel
+    });
+    
     // Validar se as chaves foram preenchidas
     if (!apiKey || !apiSecret) {
+        console.log('❌ Validação falhou: chaves vazias');
         showNotification('Por favor, preencha a API Key e Secret da Binance!', 'error');
         return;
     }
+    
+    console.log('✅ Validação passou, salvando...');
     
     // Atualizar configurações locais
     botConfig.apiKey = apiKey;
     botConfig.apiSecret = apiSecret;
     botConfig.capitalInicial = capitalInicial;
     botConfig.riskLevel = riskLevel;
+    
+    console.log('botConfig após salvar:', {
+        hasApiKey: !!botConfig.apiKey,
+        hasApiSecret: !!botConfig.apiSecret,
+        apiKeyLength: botConfig.apiKey ? botConfig.apiKey.length : 0,
+        capital: botConfig.capitalInicial,
+        risk: botConfig.riskLevel
+    });
     
     // Atualizar configurações seguras
     safeConfig.capitalInicial = capitalInicial;
@@ -264,9 +285,12 @@ function saveSettings(event) {
         hasApiKeys: true // Indicar que as chaves foram configuradas
     };
     localStorage.setItem('botSafeConfig', JSON.stringify(safeConfigToSave));
+    console.log('💾 Configurações salvas no localStorage:', safeConfigToSave);
     
     // Enviar configurações para o servidor (isoladas por sessão)
+    console.log('📡 Enviando configurações para o servidor...');
     socket.emit('updateConfig', botConfig).then(() => {
+        console.log('✅ Configurações enviadas com sucesso!');
         closeSettings();
         showNotification('Configurações salvas com sucesso!', 'success');
         
@@ -274,7 +298,8 @@ function saveSettings(event) {
         setTimeout(() => {
             updatePlaceholders();
         }, 500);
-    }).catch(() => {
+    }).catch((error) => {
+        console.log('❌ Erro ao enviar configurações:', error);
         showNotification('Erro ao salvar configurações. Tente novamente.', 'error');
     });
 }
@@ -343,11 +368,24 @@ async function validateBalance() {
 
 // Iniciar bot
 async function startBot() {
+    console.log('=== INICIANDO BOT ===');
+    console.log('botConfig atual:', {
+        hasApiKey: !!botConfig.apiKey,
+        hasApiSecret: !!botConfig.apiSecret,
+        apiKeyLength: botConfig.apiKey ? botConfig.apiKey.length : 0,
+        capital: botConfig.capitalInicial,
+        risk: botConfig.riskLevel
+    });
+    console.log('safeConfig atual:', safeConfig);
+    
     if (!botConfig.apiKey || !botConfig.apiSecret) {
-        showNotification('Configure suas chaves da API primeiro!', 'error');
+        console.log('❌ Chaves API não encontradas!');
+        showNotification('Configure suas chaves da API primeiro! Chaves não estão salvas na sessão.', 'error');
         openSettings();
         return;
     }
+    
+    console.log('✅ Chaves API encontradas, continuando...');
     
     // Validar saldo mínimo configurado
     if (botConfig.capitalInicial < 20) {
@@ -357,6 +395,7 @@ async function startBot() {
     }
     
     // Validar saldo real na API
+    console.log('🔍 Validando saldo na Binance...');
     const balanceData = await validateBalance();
     if (!balanceData) {
         return; // Erro já mostrado na função validateBalance
