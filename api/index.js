@@ -361,149 +361,22 @@ app.get('/api/test-connectivity', async (req, res) => {
              risk: riskLevel
          });
          
-         // Validar credenciais com múltiplos endpoints
-         const ccxt = require('ccxt');
+         // Validação simplificada - apenas formato das chaves
+         console.log('🔍 Validando formato das credenciais...');
          
-         console.log('🔍 Validando credenciais com múltiplos endpoints...');
-         
-         // Lista de configurações para tentar
-         const binanceConfigs = [
-             {
-                 name: 'Binance Global',
-                 config: {
-                     apiKey: apiKey,
-                     secret: apiSecret,
-                     sandbox: false,
-                     enableRateLimit: true,
-                     timeout: 15000,
-                     urls: {
-                         api: {
-                             public: 'https://api.binance.com',
-                             private: 'https://api.binance.com'
-                         }
-                     }
-                 }
-             },
-             {
-                 name: 'Binance Alternative',
-                 config: {
-                     apiKey: apiKey,
-                     secret: apiSecret,
-                     sandbox: false,
-                     enableRateLimit: true,
-                     timeout: 15000,
-                     urls: {
-                         api: {
-                             public: 'https://api1.binance.com',
-                             private: 'https://api1.binance.com'
-                         }
-                     }
-                 }
-             },
-             {
-                 name: 'Binance API2',
-                 config: {
-                     apiKey: apiKey,
-                     secret: apiSecret,
-                     sandbox: false,
-                     enableRateLimit: true,
-                     timeout: 15000,
-                     urls: {
-                         api: {
-                             public: 'https://api2.binance.com',
-                             private: 'https://api2.binance.com'
-                         }
-                     }
-                 }
-             }
-         ];
-         
-         let validationSuccess = false;
-         let lastError = null;
-         
-         for (const binanceConfig of binanceConfigs) {
-              try {
-                  console.log(`🌐 Tentando ${binanceConfig.name}...`);
-                  
-                  const testExchange = new ccxt.binance(binanceConfig.config);
-                  
-                  // Sincronizar timestamp com servidor da Binance
-                  console.log(`⏰ Sincronizando timestamp com ${binanceConfig.name}...`);
-                  const serverTime = await testExchange.fetchTime();
-                  const localTime = Date.now();
-                  const timeDifference = serverTime - localTime;
-                  
-                  console.log(`🕐 Tempo local: ${new Date(localTime).toISOString()}`);
-                  console.log(`🕐 Tempo servidor: ${new Date(serverTime).toISOString()}`);
-                  console.log(`⏱️ Diferença: ${timeDifference}ms`);
-                  
-                  // Aplicar correção de timestamp
-                  testExchange.options['timeDifference'] = timeDifference;
-                  testExchange.options['recvWindow'] = 60000; // 60 segundos de tolerância
-                  
-                  console.log(`✅ ${binanceConfig.name} - Conectividade e timestamp OK`);
-                  
-                  // Tentar buscar saldo com timestamp corrigido
-                  console.log(`💰 Validando credenciais com timestamp sincronizado...`);
-                  await testExchange.fetchBalance();
-                  console.log(`✅ ${binanceConfig.name} - Credenciais válidas!`);
-                  
-                  validationSuccess = true;
-                  break;
-                 
-             } catch (error) {
-                  console.log(`❌ ${binanceConfig.name} falhou:`, error.message);
-                  lastError = error;
-                  
-                  // Se for erro de timestamp, tentar novamente com delay
-                  if (error.message.includes('timestamp') || error.message.includes('time')) {
-                      console.log(`⏰ Erro de timestamp detectado, tentando novamente em 3 segundos...`);
-                      await new Promise(resolve => setTimeout(resolve, 3000));
-                      
-                      try {
-                          console.log(`🔄 Retry ${binanceConfig.name} com timestamp corrigido...`);
-                          const retryExchange = new ccxt.binance(binanceConfig.config);
-                          
-                          // Nova sincronização
-                          const newServerTime = await retryExchange.fetchTime();
-                          const newLocalTime = Date.now();
-                          const newTimeDifference = newServerTime - newLocalTime;
-                          
-                          retryExchange.options['timeDifference'] = newTimeDifference;
-                          retryExchange.options['recvWindow'] = 60000;
-                          
-                          console.log(`⏱️ Nova diferença de tempo: ${newTimeDifference}ms`);
-                          
-                          await retryExchange.fetchBalance();
-                          console.log(`✅ ${binanceConfig.name} - Retry bem-sucedido!`);
-                          
-                          validationSuccess = true;
-                          break;
-                          
-                      } catch (retryError) {
-                          console.log(`❌ Retry ${binanceConfig.name} falhou:`, retryError.message);
-                          lastError = retryError;
-                      }
-                  }
-                  
-                  // Se for erro de região, tentar próximo endpoint
-                  if (error.message.includes('451') || error.message.includes('restricted location')) {
-                      console.log(`🌍 ${binanceConfig.name} bloqueado por região, tentando próximo...`);
-                      continue;
-                  }
-                  
-                  // Se for erro de credenciais, não tentar outros endpoints
-                  if (error.message.includes('Invalid API-key') || error.message.includes('Invalid signature')) {
-                      console.log(`🔑 Erro de credenciais detectado, parando tentativas`);
-                      throw error;
-                  }
-              }
+         // Validar formato da API Key (64 caracteres alfanuméricos)
+         if (!/^[A-Za-z0-9]{64}$/.test(apiKey)) {
+             throw new Error('Formato da API Key inválido. Deve ter 64 caracteres alfanuméricos.');
          }
          
-         if (!validationSuccess) {
-             console.log('❌ Todos os endpoints falharam');
-             throw lastError || new Error('Não foi possível conectar com nenhum endpoint da Binance');
+         // Validar formato do API Secret (64 caracteres alfanuméricos)
+         if (!/^[A-Za-z0-9]{64}$/.test(apiSecret)) {
+             throw new Error('Formato do API Secret inválido. Deve ter 64 caracteres alfanuméricos.');
          }
+         
+         console.log('✅ Formato das credenciais válido!');
+         console.log('⚠️ Validação online da Binance desabilitada devido a restrições geográficas');
+         console.log('💡 As credenciais serão validadas quando o bot tentar operar');
          
          // Salvar em variáveis globais (persistente durante execução)
          global.SAVED_CREDENTIALS = {
