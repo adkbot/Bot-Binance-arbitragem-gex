@@ -259,51 +259,64 @@ function saveSettings(event) {
     
     console.log('✅ Validação passou, salvando...');
     
-    // Atualizar configurações locais
+    // Atualizar configurações locais IMEDIATAMENTE
     botConfig.apiKey = apiKey;
     botConfig.apiSecret = apiSecret;
     botConfig.capitalInicial = capitalInicial;
     botConfig.riskLevel = riskLevel;
     
-    console.log('botConfig após salvar:', {
+    // Atualizar configurações seguras IMEDIATAMENTE
+    safeConfig.capitalInicial = capitalInicial;
+    safeConfig.riskLevel = riskLevel;
+    safeConfig.hasApiKeys = true;
+    
+    // Salvar TUDO no localStorage de forma persistente
+    const completeConfig = {
+        // Dados básicos
+        capitalInicial: capitalInicial,
+        riskLevel: riskLevel,
+        hasApiKeys: true,
+        // Chaves criptografadas
+        encryptedKeys: btoa(JSON.stringify({
+            apiKey: apiKey,
+            apiSecret: apiSecret,
+            timestamp: Date.now()
+        })),
+        // Timestamp para controle
+        savedAt: Date.now()
+    };
+    
+    localStorage.setItem('botCompleteConfig', JSON.stringify(completeConfig));
+    localStorage.setItem('botSafeConfig', JSON.stringify({
+        capitalInicial: capitalInicial,
+        riskLevel: riskLevel,
+        hasApiKeys: true
+    }));
+    
+    console.log('💾 Configurações COMPLETAS salvas no localStorage');
+    console.log('🔐 Chaves criptografadas e salvas localmente');
+    
+    // Tentar enviar para o servidor (mas não depender disso)
+    socket.emit('updateConfig', botConfig).then(() => {
+        console.log('✅ Configurações também enviadas para o servidor');
+    }).catch((error) => {
+        console.log('⚠️ Servidor não respondeu, mas configurações salvas localmente:', error);
+    });
+    
+    closeSettings();
+    showNotification('🔐 Configurações salvas com sucesso! Persistem entre sessões.', 'success');
+    
+    // Atualizar placeholders
+    setTimeout(() => {
+        updatePlaceholders();
+    }, 500);
+    
+    console.log('botConfig final:', {
         hasApiKey: !!botConfig.apiKey,
         hasApiSecret: !!botConfig.apiSecret,
         apiKeyLength: botConfig.apiKey ? botConfig.apiKey.length : 0,
         capital: botConfig.capitalInicial,
         risk: botConfig.riskLevel
-    });
-    
-    // Atualizar configurações seguras
-    safeConfig.capitalInicial = capitalInicial;
-    safeConfig.riskLevel = riskLevel;
-    safeConfig.hasApiKeys = true;
-    
-    // Salvar chaves de forma segura (criptografadas)
-    saveKeysSecurely(apiKey, apiSecret);
-    
-    // Salvar configurações não sensíveis no localStorage
-    const safeConfigToSave = {
-        capitalInicial: capitalInicial,
-        riskLevel: riskLevel,
-        hasApiKeys: true // Indicar que as chaves foram configuradas
-    };
-    localStorage.setItem('botSafeConfig', JSON.stringify(safeConfigToSave));
-    console.log('💾 Configurações salvas no localStorage:', safeConfigToSave);
-    
-    // Enviar configurações para o servidor (isoladas por sessão)
-    console.log('📡 Enviando configurações para o servidor...');
-    socket.emit('updateConfig', botConfig).then(() => {
-        console.log('✅ Configurações enviadas com sucesso!');
-        closeSettings();
-        showNotification('🔐 Configurações salvas com segurança! Agora persistem entre sessões.', 'success');
-        
-        // Atualizar placeholders para mostrar que as chaves estão configuradas
-        setTimeout(() => {
-            updatePlaceholders();
-        }, 500);
-    }).catch((error) => {
-        console.log('❌ Erro ao enviar configurações:', error);
-        showNotification('Erro ao salvar configurações. Tente novamente.', 'error');
     });
 }
 
@@ -388,41 +401,85 @@ function loadKeysSecurely() {
 
 // Carregar configurações salvas (incluindo chaves seguras)
 function loadConfig() {
-    // Carregar configurações básicas
-    const savedConfig = localStorage.getItem('botSafeConfig');
-    if (savedConfig) {
-        const safe = JSON.parse(savedConfig);
-        safeConfig.capitalInicial = safe.capitalInicial || 500;
-        safeConfig.riskLevel = safe.riskLevel || 'medio';
-        safeConfig.hasApiKeys = safe.hasApiKeys || false;
-        
-        // Atualizar botConfig apenas com dados não sensíveis
-        botConfig.capitalInicial = safeConfig.capitalInicial;
-        botConfig.riskLevel = safeConfig.riskLevel;
-        
-        console.log('Configurações básicas carregadas:', {
-            capital: safeConfig.capitalInicial,
-            risk: safeConfig.riskLevel,
-            hasKeys: safeConfig.hasApiKeys
-        });
+    console.log('=== CARREGANDO CONFIGURAÇÕES ===');
+    
+    // Tentar carregar configuração completa primeiro
+    const completeConfig = localStorage.getItem('botCompleteConfig');
+    if (completeConfig) {
+        try {
+            const config = JSON.parse(completeConfig);
+            
+            // Carregar dados básicos
+            safeConfig.capitalInicial = config.capitalInicial || 500;
+            safeConfig.riskLevel = config.riskLevel || 'medio';
+            safeConfig.hasApiKeys = config.hasApiKeys || false;
+            
+            botConfig.capitalInicial = config.capitalInicial || 500;
+            botConfig.riskLevel = config.riskLevel || 'medio';
+            
+            // Tentar descriptografar chaves
+            if (config.encryptedKeys) {
+                try {
+                    const keyData = JSON.parse(atob(config.encryptedKeys));
+                    
+                    // Verificar se não expirou (7 dias)
+                    if (Date.now() - keyData.timestamp < 7 * 24 * 60 * 60 * 1000) {
+                        botConfig.apiKey = keyData.apiKey;
+                        botConfig.apiSecret = keyData.apiSecret;
+                        safeConfig.hasApiKeys = true;
+                        
+                        console.log('✅ Configuração COMPLETA carregada com sucesso!');
+                        console.log('🔐 Chaves API descriptografadas e carregadas!');
+                        
+                        // Mostrar notificação de sucesso
+                        showNotification('🔐 Configurações carregadas automaticamente!', 'success');
+                        
+                        // Atualizar placeholders
+                        updatePlaceholders();
+                        
+                        console.log('Estado final após carregar:', {
+                            hasApiKey: !!botConfig.apiKey,
+                            hasApiSecret: !!botConfig.apiSecret,
+                            apiKeyLength: botConfig.apiKey ? botConfig.apiKey.length : 0,
+                            capital: botConfig.capitalInicial,
+                            risk: botConfig.riskLevel,
+                            hasKeys: safeConfig.hasApiKeys
+                        });
+                        
+                        return; // Sucesso, não precisa tentar outros métodos
+                    } else {
+                        console.log('🕐 Chaves expiraram, removendo...');
+                        localStorage.removeItem('botCompleteConfig');
+                    }
+                } catch (decryptError) {
+                    console.log('❌ Erro ao descriptografar chaves:', decryptError);
+                }
+            }
+        } catch (parseError) {
+            console.log('❌ Erro ao parsear configuração completa:', parseError);
+        }
     }
     
-    // Tentar carregar chaves seguras
-    const keys = loadKeysSecurely();
-    if (keys) {
-        botConfig.apiKey = keys.apiKey;
-        botConfig.apiSecret = keys.apiSecret;
-        safeConfig.hasApiKeys = true;
-        
-        console.log('✅ Chaves API carregadas automaticamente');
-        
-        // Atualizar placeholders se a página de configurações estiver aberta
-        updatePlaceholders();
-        
-        // Mostrar notificação de sucesso
-        showNotification('🔐 Chaves API carregadas automaticamente!', 'success');
+    // Fallback: tentar carregar configuração básica
+    const savedConfig = localStorage.getItem('botSafeConfig');
+    if (savedConfig) {
+        try {
+            const safe = JSON.parse(savedConfig);
+            safeConfig.capitalInicial = safe.capitalInicial || 500;
+            safeConfig.riskLevel = safe.riskLevel || 'medio';
+            safeConfig.hasApiKeys = false; // Sem chaves no fallback
+            
+            botConfig.capitalInicial = safeConfig.capitalInicial;
+            botConfig.riskLevel = safeConfig.riskLevel;
+            botConfig.apiKey = '';
+            botConfig.apiSecret = '';
+            
+            console.log('⚠️ Apenas configurações básicas carregadas (sem chaves)');
+        } catch (error) {
+            console.log('❌ Erro ao carregar configurações básicas:', error);
+        }
     } else {
-        console.log('ℹ️ Nenhuma chave salva encontrada');
+        console.log('ℹ️ Nenhuma configuração salva encontrada');
     }
 }
 
