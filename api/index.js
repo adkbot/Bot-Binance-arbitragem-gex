@@ -399,19 +399,53 @@ app.get('/api/test-connectivity', async (req, res) => {
          });
          
      } catch (error) {
-         console.error('❌ Erro ao salvar credenciais:', error);
-         
-         let errorMessage = 'Erro ao salvar credenciais';
-         if (error.message.includes('Invalid API-key')) {
-             errorMessage = 'Chave da API inválida';
-         } else if (error.message.includes('Invalid signature')) {
-             errorMessage = 'Secret da API inválido';
-         } else if (error.message.includes('IP not allowed')) {
-             errorMessage = 'IP não autorizado na Binance';
-         }
-         
-         res.status(400).json({ error: errorMessage });
-     }
+          console.error('❌ ERRO DETALHADO AO SALVAR CREDENCIAIS:');
+          console.error('Tipo do erro:', error.constructor.name);
+          console.error('Mensagem completa:', error.message);
+          console.error('Stack trace:', error.stack);
+          
+          let errorMessage = 'Erro ao validar credenciais na Binance';
+          let errorDetails = error.message;
+          
+          // Erros específicos da Binance
+          if (error.message.includes('Invalid API-key') || error.message.includes('API-key')) {
+              errorMessage = '🔑 Chave da API inválida ou incorreta';
+              errorDetails = 'Verifique se a API Key foi copiada corretamente da Binance';
+          } else if (error.message.includes('Invalid signature') || error.message.includes('signature')) {
+              errorMessage = '🔐 Secret da API inválido ou incorreto';
+              errorDetails = 'Verifique se o API Secret foi copiado corretamente da Binance';
+          } else if (error.message.includes('IP not allowed') || error.message.includes('IP')) {
+              errorMessage = '🌐 IP não autorizado na Binance';
+              errorDetails = 'Configure seu IP atual nas configurações da API na Binance';
+          } else if (error.message.includes('timestamp') || error.message.includes('time')) {
+              errorMessage = '⏰ Problema de sincronização de tempo';
+              errorDetails = 'Erro de timestamp - tente novamente em alguns segundos';
+          } else if (error.message.includes('timeout') || error.message.includes('ETIMEDOUT')) {
+              errorMessage = '⏱️ Timeout na conexão com a Binance';
+              errorDetails = 'Conexão demorou muito - verifique sua internet';
+          } else if (error.message.includes('ENOTFOUND') || error.message.includes('DNS')) {
+              errorMessage = '🌐 Problema de conectividade de rede';
+              errorDetails = 'Não foi possível conectar com a Binance - verifique sua internet';
+          } else if (error.message.includes('permission') || error.message.includes('Permission')) {
+              errorMessage = '🚫 Permissões insuficientes na API';
+              errorDetails = 'Habilite as permissões "Spot Trading" na sua API da Binance';
+          } else if (error.message.includes('banned') || error.message.includes('restricted')) {
+              errorMessage = '🚫 Conta ou IP restrito';
+              errorDetails = 'Sua conta ou IP pode estar temporariamente restrito na Binance';
+          } else {
+              errorMessage = '❌ Erro na validação das credenciais';
+              errorDetails = `Erro específico: ${error.message}`;
+          }
+          
+          console.log('🔍 Erro categorizado como:', errorMessage);
+          console.log('📝 Detalhes para o usuário:', errorDetails);
+          
+          res.status(400).json({ 
+              error: errorMessage,
+              details: errorDetails,
+              originalError: error.message
+          });
+      }
  });
  
  // Rota para carregar credenciais salvas

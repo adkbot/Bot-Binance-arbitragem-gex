@@ -298,9 +298,19 @@ async function saveSettings(event) {
             console.log('✅ Sistema configurado e pronto para trading!');
             
         } else {
-            console.log('❌ Erro ao salvar:', result.error);
-            showNotification('❌ ' + result.error, 'error');
-        }
+             console.log('❌ ERRO DETALHADO AO SALVAR:');
+             console.log('Erro principal:', result.error);
+             console.log('Detalhes:', result.details);
+             console.log('Erro original:', result.originalError);
+             
+             // Mostrar erro específico para o usuário
+             let errorMessage = result.error;
+             if (result.details) {
+                 errorMessage += '\n\n💡 ' + result.details;
+             }
+             
+             showNotification(errorMessage, 'error');
+         }
         
     } catch (error) {
         console.error('❌ Erro de comunicação:', error);
